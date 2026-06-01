@@ -78,6 +78,31 @@ class Task extends Model
     }
 
     /**
+     * Atomically transition this task from ready to processing.
+     *
+     * Guarded on the current status so concurrent dispatchers cannot both
+     * claim the same task. Returns true only for the caller that won the
+     * transition. Idempotent for non-ready tasks (returns false, no change).
+     */
+    public function claim(): bool
+    {
+        $claimed = static::query()
+            ->whereKey($this->getKey())
+            ->where('status', TaskStatus::Ready->value)
+            ->update(['status' => TaskStatus::Processing->value]) === 1;
+
+        if ($claimed) {
+            $this->status = TaskStatus::Processing;
+            $this->recordEvent('claimed', [
+                'from' => TaskStatus::Ready->value,
+                'to' => TaskStatus::Processing->value,
+            ]);
+        }
+
+        return $claimed;
+    }
+
+    /**
      * @param  array<string, mixed>|null  $payload
      */
     public function recordEvent(string $kind, ?array $payload = null): TaskEvent

@@ -122,6 +122,44 @@ it('sends a customer task to review and passes the git disallow patterns', funct
     expect($task->events()->where('kind', 'awaiting_review')->exists())->toBeTrue();
 });
 
+it('runs end-to-end from an already-claimed processing task', function () {
+    Storage::fake('local');
+
+    $fake = new FakeClaudeRunner;
+    $fake->result = FakeClaudeRunner::success();
+    bindFakeRunner($fake);
+
+    $profile = Profile::factory()->customer()->create(['workdir' => '/tmp/conductor-work']);
+    $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Ready]);
+
+    // Dispatcher claims first, then the job runs against a processing task.
+    expect($task->claim())->toBeTrue();
+
+    (new RunTaskJob($task))->handle($fake, app(TaskPromptBuilder::class));
+
+    $task->refresh();
+    expect($task->status)->toBe(TaskStatus::Review)
+        ->and($task->runs()->count())->toBe(1)
+        ->and($task->events()->where('kind', 'claimed')->count())->toBe(1);
+});
+
+it('runs via dispatchSync from a ready task despite being unique', function () {
+    Storage::fake('local');
+
+    $fake = new FakeClaudeRunner;
+    $fake->result = FakeClaudeRunner::success();
+    bindFakeRunner($fake);
+
+    $profile = Profile::factory()->personal()->create(['workdir' => '/tmp/conductor-work']);
+    $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Ready]);
+
+    RunTaskJob::dispatchSync($task);
+
+    $task->refresh();
+    expect($task->status)->toBe(TaskStatus::Complete)
+        ->and($task->runs()->count())->toBe(1);
+});
+
 it('increments attempt on retry of a blocked task', function () {
     Storage::fake('local');
 

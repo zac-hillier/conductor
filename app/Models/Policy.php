@@ -43,4 +43,9 @@ class Policy extends Model
     {
         return (bool) ($this->rules['require_review'] ?? false);
     }
+
+    public function autoDispatch(): bool
+    {
+        return (bool) ($this->rules['auto_dispatch'] ?? false);
+    }
 }

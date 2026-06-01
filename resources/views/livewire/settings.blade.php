@@ -25,6 +25,17 @@
 
         <flux:switch wire:model="requireReview" label="Require human review before complete" />
 
+        <flux:switch wire:model="autoDispatch" label="Auto-dispatch ready tasks" />
+        <flux:text size="sm" class="text-zinc-400">When on, the scheduler claims and runs ready tasks for this profile up to the concurrency cap.</flux:text>
+
+        <flux:input
+            type="number"
+            wire:model="concurrencyCap"
+            label="Concurrency cap"
+            min="1"
+        />
+        <flux:text size="sm" class="text-zinc-400">Maximum number of tasks running at once for this profile.</flux:text>
+
         <flux:textarea
             wire:model="disallowedTools"
             label="Disallowed tools"

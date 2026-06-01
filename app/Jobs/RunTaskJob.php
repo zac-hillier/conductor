@@ -8,6 +8,7 @@ use App\Services\Claude\ClaudeRunner;
 use App\Services\Claude\ProcessClaudeRunner;
 use App\Services\TaskPromptBuilder;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -15,7 +16,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
-class RunTaskJob implements ShouldQueue
+class RunTaskJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -27,7 +28,19 @@ class RunTaskJob implements ShouldQueue
      */
     private const SUMMARY_LIMIT = 10000;
 
+    /**
+     * Belt-and-braces guard against a duplicate job for the same task being
+     * queued while one is already pending. The atomic claim is the primary
+     * defence; this simply prevents redundant queue entries.
+     */
+    public int $uniqueFor = 3600;
+
     public function __construct(public Task $task) {}
+
+    public function uniqueId(): string
+    {
+        return (string) $this->task->id;
+    }
 
     public function handle(ClaudeRunner $runner, TaskPromptBuilder $promptBuilder): void
     {
@@ -37,16 +50,26 @@ class RunTaskJob implements ShouldQueue
             return;
         }
 
-        if (! in_array($task->status, [TaskStatus::Ready, TaskStatus::Blocked], true)) {
-            return;
+        // A ready task may not yet have been claimed (e.g. dispatchSync or a
+        // direct retry). Claiming here is idempotent: it transitions ready ->
+        // processing and records the event, or no-ops if already processing.
+        if ($task->status === TaskStatus::Ready) {
+            $task->claim();
         }
 
-        $from = $task->status;
-        $task->update(['status' => TaskStatus::Processing]);
-        $task->recordEvent('status_changed', [
-            'from' => $from->value,
-            'to' => TaskStatus::Processing->value,
-        ]);
+        // A blocked task is being retried directly; promote it to processing so
+        // the run proceeds from a consistent state.
+        if ($task->status === TaskStatus::Blocked) {
+            $task->update(['status' => TaskStatus::Processing]);
+            $task->recordEvent('status_changed', [
+                'from' => TaskStatus::Blocked->value,
+                'to' => TaskStatus::Processing->value,
+            ]);
+        }
+
+        if ($task->status !== TaskStatus::Processing) {
+            return;
+        }
 
         $run = $task->runs()->create([
             'attempt' => $task->nextAttempt(),

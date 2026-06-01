@@ -165,7 +165,9 @@ class Board extends Component
             return;
         }
 
-        RunTaskJob::dispatch($task);
+        if ($task->claim()) {
+            RunTaskJob::dispatch($task);
+        }
     }
 
     public function scopeTask(): void

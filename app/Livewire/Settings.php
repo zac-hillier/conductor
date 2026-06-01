@@ -15,6 +15,10 @@ class Settings extends Component
 
     public bool $requireReview = false;
 
+    public bool $autoDispatch = false;
+
+    public int $concurrencyCap = 3;
+
     public string $disallowedTools = '';
 
     public bool $saved = false;
@@ -31,7 +35,9 @@ class Settings extends Component
         $policy = $profile->policyOrDefault();
         $this->permissionMode = $policy->permissionMode();
         $this->requireReview = $policy->requiresReview();
+        $this->autoDispatch = $policy->autoDispatch();
         $this->disallowedTools = implode("\n", $policy->disallowedTools());
+        $this->concurrencyCap = (int) $profile->concurrency_cap;
     }
 
     public function save(): void
@@ -39,6 +45,8 @@ class Settings extends Component
         $validated = $this->validate([
             'permissionMode' => ['required', 'in:'.implode(',', self::PERMISSION_MODES)],
             'requireReview' => ['boolean'],
+            'autoDispatch' => ['boolean'],
+            'concurrencyCap' => ['required', 'integer', 'min:1'],
             'disallowedTools' => ['nullable', 'string'],
         ]);
 
@@ -52,12 +60,15 @@ class Settings extends Component
             'permission_mode' => $validated['permissionMode'],
             'disallowed_tools' => $tools,
             'require_review' => (bool) $validated['requireReview'],
+            'auto_dispatch' => (bool) $validated['autoDispatch'],
         ];
 
         $this->profile->policy()->updateOrCreate(
             ['profile_id' => $this->profile->id],
             ['rules' => $rules],
         );
+
+        $this->profile->update(['concurrency_cap' => $validated['concurrencyCap']]);
 
         $this->profile->refresh();
         $this->saved = true;
