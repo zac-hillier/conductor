@@ -1,0 +1,15 @@
+[Unit]
+Description=Conductor web UI (artisan serve on 127.0.0.1:8088, proxied as conductor.zh)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/zac/conductor
+Environment=PATH=/home/zac/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PHP_CLI_SERVER_WORKERS=4
+ExecStart=/usr/bin/php /home/zac/conductor/artisan serve --host=127.0.0.1 --port=8088
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
