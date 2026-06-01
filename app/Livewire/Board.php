@@ -30,6 +30,11 @@ class Board extends Component
     // Drawer / edit state.
     public ?int $selectedTaskId = null;
 
+    // Controls the detail flyout open/close (a boolean — never bind the int
+    // $selectedTaskId to the modal, or its open-state casts true->1 and clobbers
+    // the selected id).
+    public bool $showDetail = false;
+
     public string $editTitle = '';
 
     public string $editSummary = '';
@@ -101,6 +106,14 @@ class Board extends Component
         $this->editSummary = $task->summary ?? '';
         $this->editPriority = $task->priority;
         $this->editStatus = $task->status->value;
+        $this->showDetail = true;
+    }
+
+    public function updatedShowDetail(bool $value): void
+    {
+        if (! $value) {
+            $this->selectedTaskId = null;
+        }
     }
 
     public function updateTask(): void
@@ -322,6 +335,7 @@ class Board extends Component
         $this->profile->tasks()->findOrFail($this->selectedTaskId)->delete();
 
         $this->selectedTaskId = null;
+        $this->showDetail = false;
     }
 
     private function nextRef(): string

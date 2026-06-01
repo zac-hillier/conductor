@@ -137,8 +137,7 @@
     <flux:modal
         variant="flyout"
         position="right"
-        :open="$selectedTask !== null"
-        wire:model.self="selectedTaskId"
+        wire:model.self="showDetail"
         name="task-drawer"
         class="w-screen max-w-none border-0 p-0"
     >

@@ -122,3 +122,21 @@ it('deletes a task and cascades its events', function () {
     expect(Task::find($task->id))->toBeNull()
         ->and(DB::table('task_events')->where('task_id', $task->id)->count())->toBe(0);
 });
+
+it('keeps selectedTaskId as the task id and uses a separate boolean for the drawer', function () {
+    // Regression: the detail flyout must bind its open-state to the boolean
+    // $showDetail, NOT the int $selectedTaskId — binding the modal to the int
+    // cast its open=true to 1 and clobbered the selected id (delete -> 404).
+    $profile = Profile::factory()->create();
+    $task = Task::factory()->for($profile)->create();
+
+    $component = Livewire::test(Board::class, ['profile' => $profile])
+        ->call('selectTask', $task->id);
+
+    $component->assertSet('selectedTaskId', $task->id)
+        ->assertSet('showDetail', true);
+
+    // Closing the flyout (showDetail -> false) clears the selection.
+    $component->set('showDetail', false)
+        ->assertSet('selectedTaskId', null);
+});
