@@ -83,8 +83,19 @@ class DispatchScheduler
      */
     private function candidates(Profile $profile, int $limit): Collection
     {
-        return $profile->tasks()
-            ->where('status', TaskStatus::Ready->value)
+        $query = $profile->tasks()
+            ->where('status', TaskStatus::Ready->value);
+
+        // Readiness gate: hold unscored (null) or below-threshold tasks from
+        // auto-dispatch. They remain ready and visible, awaiting scoring or a
+        // human decision. Manual dispatch is unaffected. When readiness is
+        // disabled, behaviour is unchanged.
+        if (config('conductor.readiness.enabled')) {
+            $query->whereNotNull('readiness_score')
+                ->where('readiness_score', '>=', (int) config('conductor.readiness.min_auto_dispatch', 50));
+        }
+
+        return $query
             ->orderByDesc('priority')
             ->orderBy('created_at')
             ->orderBy('id')

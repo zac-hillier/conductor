@@ -18,13 +18,52 @@ class FakeClaudeRunner implements ClaudeRunner
      */
     public array $lastOptions = [];
 
+    /**
+     * Per-call results, consumed FIFO. Lets a multi-reviewer run be driven
+     * deterministically by queueing one result per reviewer.
+     *
+     * @var array<int, ClaudeResult>
+     */
+    public array $queue = [];
+
+    /**
+     * Every call's prompt/workdir/options, in order.
+     *
+     * @var array<int, array{prompt: string, workdir: string, options: array<string, mixed>}>
+     */
+    public array $calls = [];
+
     public function run(string $prompt, string $workdir, array $options = []): ClaudeResult
     {
         $this->lastPrompt = $prompt;
         $this->lastWorkdir = $workdir;
         $this->lastOptions = $options;
+        $this->calls[] = ['prompt' => $prompt, 'workdir' => $workdir, 'options' => $options];
+
+        if ($this->queue !== []) {
+            return array_shift($this->queue);
+        }
 
         return $this->result ?? self::success();
+    }
+
+    /**
+     * Queue a reviewer result built from a readiness JSON payload.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function queueJson(array $payload): self
+    {
+        $this->queue[] = self::json($payload);
+
+        return $this;
+    }
+
+    public function queueResult(ClaudeResult $result): self
+    {
+        $this->queue[] = $result;
+
+        return $this;
     }
 
     public static function success(): ClaudeResult

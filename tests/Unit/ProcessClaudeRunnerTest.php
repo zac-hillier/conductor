@@ -75,6 +75,43 @@ it('appends allowed tools for a read-only scoping run and omits edit/bash tools'
         ->toContain('--output-format');
 });
 
+it('builds an agent flag and read-only tools for a readiness reviewer run', function () {
+    $runner = new ProcessClaudeRunner;
+
+    $command = $runner->buildCommand('score this', [
+        'agent' => 'ag-review',
+        'allowed_tools' => ['Read', 'Grep', 'Glob'],
+    ]);
+
+    expect($command)->toContain('--agent')
+        ->toContain('ag-review')
+        ->toContain('--output-format')
+        ->toContain('--allowedTools')
+        ->toContain('Read')
+        ->toContain('Grep')
+        ->toContain('Glob')
+        ->not->toContain('--disallowedTools');
+
+    // --agent must precede the prompt-following flags, after the model.
+    $agentIndex = array_search('--agent', $command, true);
+    expect($command[$agentIndex + 1])->toBe('ag-review');
+
+    $string = $runner->commandString('score this', [
+        'agent' => 'ag-review',
+        'allowed_tools' => ['Read', 'Grep', 'Glob'],
+    ]);
+
+    expect($string)->toContain('--agent')
+        ->toContain('ag-review')
+        ->toContain('--allowedTools');
+});
+
+it('omits the agent flag when no agent is set', function () {
+    $command = (new ProcessClaudeRunner)->buildCommand('go');
+
+    expect($command)->not->toContain('--agent');
+});
+
 it('omits the allowed tools flag when the list is empty', function () {
     $command = (new ProcessClaudeRunner)->buildCommand('go', [
         'allowed_tools' => [],

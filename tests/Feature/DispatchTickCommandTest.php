@@ -14,6 +14,7 @@ it('prints the dry-run plan without claiming or dispatching', function () {
         'status' => TaskStatus::Ready,
         'priority' => 90,
         'ref' => 'DEMO-001',
+        'readiness_score' => 90,
     ]);
 
     $this->artisan('conductor:dispatch-tick', ['--dry-run' => true])
@@ -29,7 +30,7 @@ it('claims and dispatches when run for real', function () {
     Bus::fake();
 
     $profile = Profile::factory()->personal()->create(['concurrency_cap' => 1]);
-    $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Ready, 'priority' => 90]);
+    $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Ready, 'priority' => 90, 'readiness_score' => 90]);
 
     $this->artisan('conductor:dispatch-tick')->assertSuccessful();
 

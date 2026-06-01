@@ -2,11 +2,13 @@
 
 use App\Enums\TaskStatus;
 use App\Jobs\ScopeTaskJob;
+use App\Jobs\ScoreTaskJob;
 use App\Models\Profile;
 use App\Models\Task;
 use App\Models\TaskComment;
 use App\Services\Claude\ClaudeRunner;
 use App\Services\ScopePromptBuilder;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\FakeClaudeRunner;
 
@@ -135,6 +137,27 @@ it('refines the task and moves it to ready when the agent reports it is clear', 
         ->and($task->target_paths)->toBe(['app/Http/Controllers/OrderController.php']);
 
     expect($task->events()->where('kind', 'scoped_ready')->exists())->toBeTrue();
+});
+
+it('queues a readiness scoring job when scoping marks a task ready', function () {
+    Storage::fake('local');
+    Bus::fake();
+
+    $fake = new FakeClaudeRunner;
+    $fake->result = FakeClaudeRunner::json([
+        'ready' => true,
+        'title' => 'Paginate the orders endpoint',
+        'definition_of_done' => ['GET /api/orders accepts a cursor'],
+    ]);
+
+    $profile = Profile::factory()->create(['workdir' => '/tmp/conductor-scope']);
+    $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Scoping]);
+
+    runScope($task, $fake);
+
+    expect($task->fresh()->status)->toBe(TaskStatus::Ready);
+
+    Bus::assertDispatched(ScoreTaskJob::class, fn (ScoreTaskJob $job) => $job->task->is($task));
 });
 
 it('moves to needs input and records the raw response on a parse failure', function () {

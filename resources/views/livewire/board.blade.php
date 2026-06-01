@@ -51,6 +51,18 @@
                                 </flux:badge>
                             </div>
                             <p class="mt-1 truncate text-sm font-medium">{{ $task->title }}</p>
+                            @if ($task->readiness_score !== null && $task->status === \App\Enums\TaskStatus::Ready)
+                                @php($light = $task->readiness_detail['light'] ?? 'red')
+                                <div class="mt-2 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                                    <span @class([
+                                        'inline-flex h-2 w-2 rounded-full',
+                                        'bg-green-500' => $light === 'green',
+                                        'bg-amber-500' => $light === 'amber',
+                                        'bg-red-500' => $light === 'red',
+                                    ])></span>
+                                    Readiness {{ $task->readiness_score }}
+                                </div>
+                            @endif
                             @if ($task->status === \App\Enums\TaskStatus::Processing)
                                 <div class="mt-2 flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
                                     <span class="relative flex h-2 w-2">
@@ -131,7 +143,58 @@
                 </form>
 
                 @if ($selectedTask->status === \App\Enums\TaskStatus::Ready)
-                    <div class="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                    <div class="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        <div class="flex items-center justify-between gap-2">
+                            <flux:subheading>Readiness</flux:subheading>
+                            <flux:button
+                                variant="ghost"
+                                size="sm"
+                                icon="sparkles"
+                                wire:click="scoreTask"
+                            >
+                                {{ $selectedTask->readiness_score !== null ? 'Re-score' : 'Score readiness' }}
+                            </flux:button>
+                        </div>
+
+                        @if ($selectedTask->readiness_score !== null)
+                            @php($light = $selectedTask->readiness_detail['light'] ?? 'red')
+                            <div class="flex items-center gap-2">
+                                <span @class([
+                                    'inline-flex h-3 w-3 rounded-full',
+                                    'bg-green-500' => $light === 'green',
+                                    'bg-amber-500' => $light === 'amber',
+                                    'bg-red-500' => $light === 'red',
+                                ])></span>
+                                <span class="text-lg font-semibold">{{ $selectedTask->readiness_score }}</span>
+                                <span class="text-sm text-zinc-400">/ 100</span>
+                            </div>
+
+                            @foreach (($selectedTask->readiness_detail['reviewers'] ?? []) as $reviewer)
+                                <div wire:key="reviewer-{{ $reviewer['agent'] }}" class="rounded-md bg-zinc-50 p-2 text-sm dark:bg-zinc-800/50">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $reviewer['agent'] }}</span>
+                                        <span class="text-xs font-medium">{{ $reviewer['score'] ?? '—' }}</span>
+                                    </div>
+                                    @if (! empty($reviewer['error']))
+                                        <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $reviewer['error'] }}</p>
+                                    @else
+                                        @if (! empty($reviewer['summary']))
+                                            <p class="mt-1 text-zinc-600 dark:text-zinc-300">{{ $reviewer['summary'] }}</p>
+                                        @endif
+                                        @if (! empty($reviewer['blockers']))
+                                            <ul class="mt-1 list-inside list-disc text-xs text-zinc-500 dark:text-zinc-400">
+                                                @foreach ($reviewer['blockers'] as $blocker)
+                                                    <li>{{ $blocker }}</li>
+                                                @endforeach
+                                            </ul>
+                                        @endif
+                                    @endif
+                                </div>
+                            @endforeach
+                        @else
+                            <p class="text-xs text-zinc-400">Not yet scored. Score the brief before auto-dispatch.</p>
+                        @endif
+
                         <flux:button
                             variant="primary"
                             icon="play"

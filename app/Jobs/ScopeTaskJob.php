@@ -164,6 +164,8 @@ class ScopeTaskJob implements ShouldQueue
 
         $this->transition($task, TaskStatus::Ready);
         $task->recordEvent('scoped_ready');
+
+        ScoreTaskJob::dispatch($task);
     }
 
     private function fail(Task $task, string $raw): void

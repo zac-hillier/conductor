@@ -14,6 +14,12 @@ function scheduler(): DispatchScheduler
     return app(DispatchScheduler::class);
 }
 
+// These tests exercise the cap/priority/ordering logic, not the readiness
+// gate. The gate has dedicated coverage in SchedulerReadinessTest.
+beforeEach(function () {
+    config()->set('conductor.readiness.enabled', false);
+});
+
 it('dispatches up to the cap, highest priority first, and claims them', function () {
     Bus::fake();
 

@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Enums\TaskStatus;
 use App\Jobs\RunTaskJob;
 use App\Jobs\ScopeTaskJob;
+use App\Jobs\ScoreTaskJob;
 use App\Models\Profile;
 use App\Models\Task;
 use App\Models\TaskComment;
@@ -168,6 +169,22 @@ class Board extends Component
         if ($task->claim()) {
             RunTaskJob::dispatch($task);
         }
+    }
+
+    public function scoreTask(): void
+    {
+        if ($this->selectedTaskId === null) {
+            return;
+        }
+
+        $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+
+        if ($task->status !== TaskStatus::Ready) {
+            return;
+        }
+
+        ScoreTaskJob::dispatch($task);
+        $task->recordEvent('score_requested');
     }
 
     public function scopeTask(): void

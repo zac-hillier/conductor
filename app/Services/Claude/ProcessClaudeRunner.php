@@ -60,6 +60,8 @@ class ProcessClaudeRunner implements ClaudeRunner
         /** @var array<int, string> $allowed */
         $allowed = $options['allowed_tools'] ?? [];
 
+        $agent = isset($options['agent']) ? (string) $options['agent'] : null;
+
         $command = [
             $binary,
             '-p', $prompt,
@@ -67,6 +69,11 @@ class ProcessClaudeRunner implements ClaudeRunner
             '--permission-mode', $permissionMode,
             '--model', $model,
         ];
+
+        if ($agent !== null && $agent !== '') {
+            $command[] = '--agent';
+            $command[] = $agent;
+        }
 
         if ($allowed !== []) {
             $command[] = '--allowedTools';
