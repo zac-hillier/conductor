@@ -9,6 +9,15 @@ return [
         'extra_args' => [],
     ],
 
+    'notifications' => [
+        'enabled' => (bool) env('CONDUCTOR_NOTIFICATIONS_ENABLED', true),
+        'events' => ['needs_input', 'blocked', 'review', 'complete', 'run_failed'],
+    ],
+
+    'recovery' => [
+        'grace' => (int) env('CONDUCTOR_RECOVERY_GRACE', 120),
+    ],
+
     'readiness' => [
         'enabled' => (bool) env('CONDUCTOR_READINESS_ENABLED', true),
         'reviewers' => array_filter(array_map(

@@ -6,6 +6,7 @@ use App\Enums\TaskStatus;
 use App\Models\Task;
 use App\Services\Claude\ClaudeRunner;
 use App\Services\Claude\ProcessClaudeRunner;
+use App\Services\Notifier;
 use App\Services\TaskPromptBuilder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -116,6 +117,8 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
                     'reason' => $this->truncate($result->result, 280),
                 ]);
 
+                Notifier::taskAttention($task->fresh(), 'run_failed');
+
                 return;
             }
 
@@ -138,6 +141,11 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
                 $destination === TaskStatus::Review ? 'awaiting_review' : 'completed',
                 ['attempt' => $run->attempt],
             );
+
+            Notifier::taskAttention(
+                $task->fresh(),
+                $destination === TaskStatus::Review ? 'review' : 'complete',
+            );
         } catch (Throwable $e) {
             $run->update([
                 'finished_at' => now(),
@@ -154,6 +162,8 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
                 'attempt' => $run->attempt,
                 'reason' => $this->truncate($e->getMessage(), 280),
             ]);
+
+            Notifier::taskAttention($task->fresh(), 'run_failed');
         }
     }
 

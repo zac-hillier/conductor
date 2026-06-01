@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\TaskComment;
 use App\Services\Claude\ClaudeRunner;
 use App\Services\Claude\ProcessClaudeRunner;
+use App\Services\Notifier;
 use App\Services\ScopePromptBuilder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -124,6 +125,8 @@ class ScopeTaskJob implements ShouldQueue
 
         $this->transition($task, TaskStatus::NeedsInput);
         $task->recordEvent('scope_questions', ['count' => count($questions)]);
+
+        Notifier::taskAttention($task->fresh(), 'needs_input');
     }
 
     /**
@@ -177,6 +180,8 @@ class ScopeTaskJob implements ShouldQueue
 
         $this->transition($task, TaskStatus::NeedsInput);
         $task->recordEvent('scope_failed');
+
+        Notifier::taskAttention($task->fresh(), 'needs_input');
     }
 
     private function transition(Task $task, TaskStatus $to): void

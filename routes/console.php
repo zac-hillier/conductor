@@ -11,3 +11,7 @@ Artisan::command('inspire', function () {
 Schedule::command('conductor:dispatch-tick')
     ->everyMinute()
     ->withoutOverlapping();
+
+Schedule::command('conductor:recover')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
