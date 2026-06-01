@@ -9,6 +9,7 @@ use App\Models\Task;
 use App\Models\TaskComment;
 use App\Support\PolicyDefaults;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -143,7 +144,9 @@ class TasksYamlImporter
     {
         $ref = $this->nonEmptyString($entry['id'] ?? null);
         $summary = $this->nonEmptyString($entry['summary'] ?? null);
-        $title = $this->firstLine($summary) ?? $ref ?? 'Untitled task';
+        // The legacy summary is often a single long paragraph; cap the derived
+        // title so it fits the tasks.title column (varchar 255).
+        $title = Str::limit($this->firstLine($summary) ?? $ref ?? 'Untitled task', 250);
 
         $attributes = [
             'title' => $title,

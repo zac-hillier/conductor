@@ -80,6 +80,23 @@ it('creates the profile and tasks with mapped statuses', function () {
     @unlink($path);
 });
 
+it('truncates a long single-line summary into a column-safe title', function () {
+    $long = str_repeat('word ', 120); // ~600 chars, single line, no newline
+    $yaml = "client: Big Co\nrepo: /tmp/bigco\nnext_id: 2\nopen:\n  - id: bc-001\n    summary: {$long}\n";
+    $path = sys_get_temp_dir().'/conductor-long-'.uniqid().'.yaml';
+    file_put_contents($path, $yaml);
+
+    $summary = app(TasksYamlImporter::class)->import('bigco', $path);
+
+    expect($summary['created'])->toBe(1);
+
+    $task = Task::query()->where('ref', 'bc-001')->firstOrFail();
+    expect(mb_strlen($task->title))->toBeLessThanOrEqual(255)
+        ->and(mb_strlen((string) $task->summary))->toBeGreaterThan(255); // full summary preserved (text column)
+
+    @unlink($path);
+});
+
 it('carries blocked-task questions into an agent comment', function () {
     $path = writeTasksYaml();
 
