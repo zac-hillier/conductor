@@ -56,4 +56,20 @@ class Task extends Model
     {
         return $this->hasMany(Task::class, 'parent_id');
     }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(TaskEvent::class)->latest('created_at')->latest('id');
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $payload
+     */
+    public function recordEvent(string $kind, ?array $payload = null): TaskEvent
+    {
+        return $this->events()->create([
+            'kind' => $kind,
+            'payload' => $payload,
+        ]);
+    }
 }
