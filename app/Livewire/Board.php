@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Enums\TaskStatus;
+use App\Jobs\RunTaskJob;
 use App\Models\Profile;
 use App\Models\Task;
 use Illuminate\Validation\Rule;
@@ -146,6 +147,21 @@ class Board extends Component
         }
     }
 
+    public function dispatchTask(): void
+    {
+        if ($this->selectedTaskId === null) {
+            return;
+        }
+
+        $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+
+        if ($task->status !== TaskStatus::Ready) {
+            return;
+        }
+
+        RunTaskJob::dispatch($task);
+    }
+
     public function deleteTask(): void
     {
         if ($this->selectedTaskId === null) {
@@ -174,7 +190,7 @@ class Board extends Component
             ->groupBy(fn (Task $task) => $task->status->value);
 
         $selectedTask = $this->selectedTaskId !== null
-            ? $this->profile->tasks()->with('events')->find($this->selectedTaskId)
+            ? $this->profile->tasks()->with(['events', 'runs'])->find($this->selectedTaskId)
             : null;
 
         return view('livewire.board', [

@@ -62,6 +62,16 @@ class Task extends Model
         return $this->hasMany(TaskEvent::class)->latest('created_at')->latest('id');
     }
 
+    public function runs(): HasMany
+    {
+        return $this->hasMany(TaskRun::class)->latest('id');
+    }
+
+    public function nextAttempt(): int
+    {
+        return (int) $this->runs()->max('attempt') + 1;
+    }
+
     /**
      * @param  array<string, mixed>|null  $payload
      */

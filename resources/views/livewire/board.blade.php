@@ -45,6 +45,15 @@
                                 </flux:badge>
                             </div>
                             <p class="mt-1 truncate text-sm font-medium">{{ $task->title }}</p>
+                            @if ($task->status === \App\Enums\TaskStatus::Processing)
+                                <div class="mt-2 flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
+                                    <span class="relative flex h-2 w-2">
+                                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
+                                        <span class="relative inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                    </span>
+                                    Running
+                                </div>
+                            @endif
                         </div>
                     @endforeach
                 </div>
@@ -114,6 +123,64 @@
                         <flux:button type="submit" variant="primary" size="sm">Save changes</flux:button>
                     </div>
                 </form>
+
+                @if ($selectedTask->status === \App\Enums\TaskStatus::Ready)
+                    <div class="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        <flux:button
+                            variant="primary"
+                            icon="play"
+                            class="w-full"
+                            wire:click="dispatchTask"
+                            wire:confirm="Dispatch a worker for this task now?"
+                        >
+                            Dispatch
+                        </flux:button>
+                    </div>
+                @elseif ($selectedTask->status === \App\Enums\TaskStatus::Processing)
+                    <div class="flex items-center gap-2 border-t border-zinc-200 pt-4 text-sm text-blue-600 dark:border-zinc-700 dark:text-blue-400">
+                        <span class="relative flex h-2 w-2">
+                            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
+                            <span class="relative inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
+                        </span>
+                        Worker running…
+                    </div>
+                @endif
+
+                @if ($selectedTask->runs->isNotEmpty())
+                    <div class="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        <flux:subheading>Runs</flux:subheading>
+                        @foreach ($selectedTask->runs as $run)
+                            <details wire:key="run-{{ $run->id }}" class="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800/50">
+                                <summary class="flex cursor-pointer items-center justify-between gap-2">
+                                    <span class="flex items-center gap-2">
+                                        <span class="font-mono text-xs text-zinc-400">#{{ $run->attempt }}</span>
+                                        <flux:badge size="sm" color="{{ $run->outcome === 'success' ? 'green' : ($run->outcome === 'failed' ? 'red' : 'amber') }}">
+                                            {{ $run->outcome ?? 'running' }}
+                                        </flux:badge>
+                                    </span>
+                                    <span class="text-xs text-zinc-400">
+                                        {{ $run->cost !== null ? '£'.number_format((float) $run->cost, 4) : '' }}
+                                        {{ $run->token_count !== null ? '· '.number_format($run->token_count).' tok' : '' }}
+                                    </span>
+                                </summary>
+                                <div class="mt-2 space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                    @if ($run->started_at)
+                                        <div>Started {{ $run->started_at->format('d/m/Y H:i') }}</div>
+                                    @endif
+                                    @if ($run->finished_at)
+                                        <div>Finished {{ $run->finished_at->format('d/m/Y H:i') }} {{ $run->durationSeconds() !== null ? '('.$run->durationSeconds().'s)' : '' }}</div>
+                                    @endif
+                                    @if ($run->session_id)
+                                        <div class="font-mono">session {{ $run->session_id }}</div>
+                                    @endif
+                                </div>
+                                @if ($run->summary)
+                                    <pre class="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-white p-2 text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">{{ $run->summary }}</pre>
+                                @endif
+                            </details>
+                        @endforeach
+                    </div>
+                @endif
 
                 @if ($selectedTask->definition_of_done || $selectedTask->constraints || $selectedTask->target_paths)
                     <div class="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
