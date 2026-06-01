@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Profile;
 use App\Models\Task;
 use App\Services\TaskPromptBuilder;
 
@@ -32,4 +33,21 @@ it('omits empty sections', function () {
         ->toContain('Bare task')
         ->not->toContain('Constraints you must respect')
         ->not->toContain('Relevant target paths');
+});
+
+it('includes profile name, workdir and repo context', function () {
+    $profile = Profile::factory()->create([
+        'name' => 'Acme Ltd',
+        'workdir' => '/srv/acme',
+        'repo_url' => 'git@example.com:acme/app.git',
+    ]);
+    $task = Task::factory()->for($profile)->create(['title' => 'Ship it']);
+
+    $prompt = (new TaskPromptBuilder)->build($task->load('profile'));
+
+    expect($prompt)
+        ->toContain('Acme Ltd')
+        ->toContain('/srv/acme')
+        ->toContain('git@example.com:acme/app.git')
+        ->toContain('README.md');
 });

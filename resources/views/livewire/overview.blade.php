@@ -25,13 +25,20 @@
             @foreach ($profiles as $profile)
                 @php
                     $counts = $profile->tasks->countBy(fn ($task) => $task->status->value);
+                    $attention = collect(\App\Livewire\Inbox::ATTENTION_STATUSES)
+                        ->sum(fn ($status) => $counts->get($status->value, 0));
                 @endphp
-                <flux:card class="space-y-4">
+                <flux:card class="space-y-4" data-profile="{{ $profile->slug }}" data-attention="{{ $attention }}">
                     <div class="flex items-start justify-between gap-3">
                         <flux:heading size="lg">{{ $profile->name }}</flux:heading>
-                        <flux:badge size="sm" color="{{ $profile->kind === \App\Enums\ProfileKind::Customer ? 'blue' : 'purple' }}">
-                            {{ $profile->kind->label() }}
-                        </flux:badge>
+                        <div class="flex items-center gap-2">
+                            @if ($attention > 0)
+                                <flux:badge size="sm" color="amber" icon="inbox">{{ $attention }}</flux:badge>
+                            @endif
+                            <flux:badge size="sm" color="{{ $profile->kind === \App\Enums\ProfileKind::Customer ? 'blue' : 'purple' }}">
+                                {{ $profile->kind->label() }}
+                            </flux:badge>
+                        </div>
                     </div>
 
                     <div class="flex flex-wrap gap-1.5">
@@ -42,15 +49,26 @@
                         @endforeach
                     </div>
 
-                    <flux:button
-                        href="{{ route('profiles.board', $profile) }}"
-                        variant="ghost"
-                        size="sm"
-                        icon-trailing="arrow-right"
-                        wire:navigate
-                    >
-                        Open board
-                    </flux:button>
+                    <div class="flex items-center gap-2">
+                        <flux:button
+                            href="{{ route('profiles.board', $profile) }}"
+                            variant="ghost"
+                            size="sm"
+                            icon-trailing="arrow-right"
+                            wire:navigate
+                        >
+                            Open board
+                        </flux:button>
+                        <flux:button
+                            href="{{ route('profiles.inbox', $profile) }}"
+                            variant="ghost"
+                            size="sm"
+                            icon="inbox"
+                            wire:navigate
+                        >
+                            Inbox
+                        </flux:button>
+                    </div>
                 </flux:card>
             @endforeach
         </div>

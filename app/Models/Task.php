@@ -67,6 +67,11 @@ class Task extends Model
         return $this->hasMany(TaskRun::class)->latest('id');
     }
 
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class)->latest('id');
+    }
+
     public function nextAttempt(): int
     {
         return (int) $this->runs()->max('attempt') + 1;

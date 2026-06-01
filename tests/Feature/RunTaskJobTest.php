@@ -5,6 +5,7 @@ use App\Jobs\RunTaskJob;
 use App\Models\Profile;
 use App\Models\Task;
 use App\Services\Claude\ClaudeRunner;
+use App\Services\TaskPromptBuilder;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\FakeClaudeRunner;
 
@@ -20,10 +21,10 @@ it('dispatches a ready task and moves it to review on success', function () {
     $fake->result = FakeClaudeRunner::success();
     bindFakeRunner($fake);
 
-    $profile = Profile::factory()->create(['workdir' => '/tmp/conductor-work']);
+    $profile = Profile::factory()->customer()->create(['workdir' => '/tmp/conductor-work']);
     $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Ready]);
 
-    (new RunTaskJob($task))->handle($fake, app(App\Services\TaskPromptBuilder::class));
+    (new RunTaskJob($task))->handle($fake, app(TaskPromptBuilder::class));
 
     $task->refresh();
     expect($task->status)->toBe(TaskStatus::Review);
@@ -52,7 +53,7 @@ it('moves a task to blocked on an error result', function () {
     $profile = Profile::factory()->create(['workdir' => '/tmp/conductor-work']);
     $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Ready]);
 
-    (new RunTaskJob($task))->handle($fake, app(App\Services\TaskPromptBuilder::class));
+    (new RunTaskJob($task))->handle($fake, app(TaskPromptBuilder::class));
 
     $task->refresh();
     expect($task->status)->toBe(TaskStatus::Blocked);
@@ -72,12 +73,53 @@ it('is a no-op when the task is not ready', function () {
     $profile = Profile::factory()->create();
     $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Backlog]);
 
-    (new RunTaskJob($task))->handle($fake, app(App\Services\TaskPromptBuilder::class));
+    (new RunTaskJob($task))->handle($fake, app(TaskPromptBuilder::class));
 
     $task->refresh();
     expect($task->status)->toBe(TaskStatus::Backlog)
         ->and($task->runs()->count())->toBe(0)
         ->and($fake->lastPrompt)->toBeNull();
+});
+
+it('auto-completes a personal task and passes bypass permissions to the runner', function () {
+    Storage::fake('local');
+
+    $fake = new FakeClaudeRunner;
+    $fake->result = FakeClaudeRunner::success();
+    bindFakeRunner($fake);
+
+    $profile = Profile::factory()->personal()->create(['workdir' => '/tmp/conductor-work']);
+    $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Ready]);
+
+    (new RunTaskJob($task))->handle($fake, app(TaskPromptBuilder::class));
+
+    $task->refresh();
+    expect($task->status)->toBe(TaskStatus::Complete)
+        ->and($fake->lastOptions['permission_mode'])->toBe('bypassPermissions')
+        ->and($fake->lastOptions['disallowed_tools'])->toBe([]);
+
+    expect($task->events()->where('kind', 'completed')->exists())->toBeTrue();
+});
+
+it('sends a customer task to review and passes the git disallow patterns', function () {
+    Storage::fake('local');
+
+    $fake = new FakeClaudeRunner;
+    $fake->result = FakeClaudeRunner::success();
+    bindFakeRunner($fake);
+
+    $profile = Profile::factory()->customer()->create(['workdir' => '/tmp/conductor-work']);
+    $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Ready]);
+
+    (new RunTaskJob($task))->handle($fake, app(TaskPromptBuilder::class));
+
+    $task->refresh();
+    expect($task->status)->toBe(TaskStatus::Review)
+        ->and($fake->lastOptions['permission_mode'])->toBe('acceptEdits')
+        ->and($fake->lastOptions['disallowed_tools'])->toContain('Bash(git push:*)')
+        ->and($fake->lastOptions['disallowed_tools'])->toContain('Bash(git commit:*)');
+
+    expect($task->events()->where('kind', 'awaiting_review')->exists())->toBeTrue();
 });
 
 it('increments attempt on retry of a blocked task', function () {
@@ -90,10 +132,10 @@ it('increments attempt on retry of a blocked task', function () {
     $profile = Profile::factory()->create(['workdir' => '/tmp/conductor-work']);
     $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Ready]);
 
-    (new RunTaskJob($task))->handle($fake, app(App\Services\TaskPromptBuilder::class));
+    (new RunTaskJob($task))->handle($fake, app(TaskPromptBuilder::class));
 
     $task->update(['status' => TaskStatus::Blocked]);
-    (new RunTaskJob($task))->handle($fake, app(App\Services\TaskPromptBuilder::class));
+    (new RunTaskJob($task))->handle($fake, app(TaskPromptBuilder::class));
 
     expect($task->runs()->pluck('attempt')->sort()->values()->all())->toBe([1, 2]);
 });

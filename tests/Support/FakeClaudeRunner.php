@@ -13,10 +13,16 @@ class FakeClaudeRunner implements ClaudeRunner
 
     public ?string $lastWorkdir = null;
 
+    /**
+     * @var array<string, mixed>
+     */
+    public array $lastOptions = [];
+
     public function run(string $prompt, string $workdir, array $options = []): ClaudeResult
     {
         $this->lastPrompt = $prompt;
         $this->lastWorkdir = $workdir;
+        $this->lastOptions = $options;
 
         return $this->result ?? self::success();
     }

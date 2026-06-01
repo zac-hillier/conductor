@@ -27,4 +27,14 @@ class ProfileFactory extends Factory
             'settings' => null,
         ];
     }
+
+    public function personal(): static
+    {
+        return $this->state(fn () => ['kind' => ProfileKind::Personal]);
+    }
+
+    public function customer(): static
+    {
+        return $this->state(fn () => ['kind' => ProfileKind::Customer]);
+    }
 }

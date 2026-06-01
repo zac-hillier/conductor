@@ -27,6 +27,40 @@ it('appends configured extra args', function () {
     expect($command)->toContain('--verbose');
 });
 
+it('includes permission mode and disallowed tools when options are set', function () {
+    $runner = new ProcessClaudeRunner;
+
+    $command = $runner->buildCommand('go', [
+        'permission_mode' => 'acceptEdits',
+        'disallowed_tools' => ['Bash(git commit:*)', 'Bash(git push:*)'],
+    ]);
+
+    expect($command)->toContain('--permission-mode')
+        ->toContain('acceptEdits')
+        ->toContain('--disallowedTools')
+        ->toContain('Bash(git commit:*)')
+        ->toContain('Bash(git push:*)');
+
+    $string = $runner->commandString('go', [
+        'permission_mode' => 'acceptEdits',
+        'disallowed_tools' => ['Bash(git commit:*)', 'Bash(git push:*)'],
+    ]);
+
+    expect($string)->toContain('--permission-mode')
+        ->toContain('--disallowedTools');
+});
+
+it('omits the disallowed tools flag when the list is empty', function () {
+    $command = (new ProcessClaudeRunner)->buildCommand('go', [
+        'permission_mode' => 'bypassPermissions',
+        'disallowed_tools' => [],
+    ]);
+
+    expect($command)->toContain('--permission-mode')
+        ->toContain('bypassPermissions')
+        ->not->toContain('--disallowedTools');
+});
+
 it('encodes the transcript path from workdir and session id', function () {
     $path = ProcessClaudeRunner::transcriptPath('/home/zac/conductor.app', 'abc-123');
 

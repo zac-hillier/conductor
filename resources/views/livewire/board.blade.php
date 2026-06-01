@@ -5,8 +5,14 @@
         </flux:button>
 
         <div class="flex items-center gap-2">
+            <flux:button href="{{ route('profiles.inbox', $profile) }}" variant="ghost" size="sm" icon="inbox" wire:navigate>
+                Inbox
+            </flux:button>
             <flux:button href="{{ route('profiles.activity', $profile) }}" variant="ghost" size="sm" icon="clock" wire:navigate>
                 Activity
+            </flux:button>
+            <flux:button href="{{ route('profiles.settings', $profile) }}" variant="ghost" size="sm" icon="cog-6-tooth" wire:navigate>
+                Settings
             </flux:button>
             <flux:button variant="primary" size="sm" icon="plus" wire:click="$set('showCreate', true)">
                 New task
@@ -144,6 +150,45 @@
                         </span>
                         Worker running…
                     </div>
+                @elseif ($selectedTask->status === \App\Enums\TaskStatus::Review)
+                    <div class="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        <flux:subheading>Review</flux:subheading>
+                        @php($latestRun = $selectedTask->runs->first())
+                        @if ($latestRun && $latestRun->summary)
+                            <pre class="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-zinc-50 p-2 text-xs text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300">{{ $latestRun->summary }}</pre>
+                        @endif
+                        <flux:textarea wire:model="reviewNote" label="Note (optional)" rows="2" placeholder="What needs changing?" />
+                        <div class="flex justify-end gap-2">
+                            <flux:button
+                                variant="ghost"
+                                size="sm"
+                                icon="arrow-uturn-left"
+                                wire:click="requestChanges"
+                            >
+                                Request changes
+                            </flux:button>
+                            <flux:button
+                                variant="primary"
+                                size="sm"
+                                icon="check"
+                                wire:click="approveTask"
+                            >
+                                Approve
+                            </flux:button>
+                        </div>
+                    </div>
+                @elseif ($selectedTask->status === \App\Enums\TaskStatus::Blocked)
+                    <div class="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        <flux:button
+                            variant="primary"
+                            icon="arrow-path"
+                            class="w-full"
+                            wire:click="retryTask"
+                            wire:confirm="Move this task back to Ready for another attempt?"
+                        >
+                            Retry
+                        </flux:button>
+                    </div>
                 @endif
 
                 @if ($selectedTask->runs->isNotEmpty())
@@ -178,6 +223,18 @@
                                     <pre class="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-white p-2 text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">{{ $run->summary }}</pre>
                                 @endif
                             </details>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if ($selectedTask->comments->isNotEmpty())
+                    <div class="space-y-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        <flux:subheading>Notes</flux:subheading>
+                        @foreach ($selectedTask->comments as $comment)
+                            <div wire:key="comment-{{ $comment->id }}" class="rounded-md bg-zinc-50 p-2 text-sm text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300">
+                                <p class="whitespace-pre-wrap">{{ $comment->body }}</p>
+                                <span class="text-xs text-zinc-400">{{ $comment->created_at->format('d/m/Y H:i') }}</span>
+                            </div>
                         @endforeach
                     </div>
                 @endif

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ProfileKind;
+use App\Support\PolicyDefaults;
 use Database\Factories\ProfileFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -42,5 +43,16 @@ class Profile extends Model
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
+    }
+
+    /**
+     * The persisted policy, or an unsaved default built from the profile kind.
+     */
+    public function policyOrDefault(): Policy
+    {
+        return $this->policy ?? new Policy([
+            'profile_id' => $this->id,
+            'rules' => PolicyDefaults::for($this->kind),
+        ]);
     }
 }

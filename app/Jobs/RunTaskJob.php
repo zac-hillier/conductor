@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Enums\TaskStatus;
 use App\Models\Task;
-use App\Models\TaskRun;
 use App\Services\Claude\ClaudeRunner;
 use App\Services\Claude\ProcessClaudeRunner;
 use App\Services\TaskPromptBuilder;
@@ -59,8 +58,12 @@ class RunTaskJob implements ShouldQueue
         try {
             $prompt = $promptBuilder->build($task);
             $workdir = $task->profile->workdir ?? base_path();
+            $policy = $task->profile->policyOrDefault();
 
-            $result = $runner->run($prompt, $workdir);
+            $result = $runner->run($prompt, $workdir, [
+                'permission_mode' => $policy->permissionMode(),
+                'disallowed_tools' => $policy->disallowedTools(),
+            ]);
 
             $logRef = $this->writeLog($run->id, $result->rawJson);
 
@@ -93,10 +96,14 @@ class RunTaskJob implements ShouldQueue
                 return;
             }
 
-            $task->update(['status' => TaskStatus::Review]);
+            $destination = $policy->requiresReview()
+                ? TaskStatus::Review
+                : TaskStatus::Complete;
+
+            $task->update(['status' => $destination]);
             $task->recordEvent('status_changed', [
                 'from' => TaskStatus::Processing->value,
-                'to' => TaskStatus::Review->value,
+                'to' => $destination->value,
             ]);
             $task->recordEvent('run_completed', [
                 'attempt' => $run->attempt,
@@ -104,6 +111,10 @@ class RunTaskJob implements ShouldQueue
                 'tokens' => $result->totalTokens(),
                 'session_id' => $result->sessionId,
             ]);
+            $task->recordEvent(
+                $destination === TaskStatus::Review ? 'awaiting_review' : 'completed',
+                ['attempt' => $run->attempt],
+            );
         } catch (Throwable $e) {
             $run->update([
                 'finished_at' => now(),

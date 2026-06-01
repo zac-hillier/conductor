@@ -54,13 +54,25 @@ class ProcessClaudeRunner implements ClaudeRunner
         /** @var array<int, string> $extra */
         $extra = $options['extra_args'] ?? config('conductor.claude.extra_args', []);
 
-        return array_merge([
+        /** @var array<int, string> $disallowed */
+        $disallowed = $options['disallowed_tools'] ?? [];
+
+        $command = [
             $binary,
             '-p', $prompt,
             '--output-format', 'json',
             '--permission-mode', $permissionMode,
             '--model', $model,
-        ], array_values($extra));
+        ];
+
+        if ($disallowed !== []) {
+            $command[] = '--disallowedTools';
+            foreach (array_values($disallowed) as $pattern) {
+                $command[] = (string) $pattern;
+            }
+        }
+
+        return array_merge($command, array_values($extra));
     }
 
     /**

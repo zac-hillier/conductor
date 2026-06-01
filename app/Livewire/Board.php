@@ -35,6 +35,8 @@ class Board extends Component
 
     public string $editStatus = TaskStatus::Backlog->value;
 
+    public string $reviewNote = '';
+
     public function mount(Profile $profile): void
     {
         $this->profile = $profile;
@@ -162,6 +164,77 @@ class Board extends Component
         RunTaskJob::dispatch($task);
     }
 
+    public function approveTask(): void
+    {
+        $task = $this->selectedReviewTask();
+
+        if ($task === null) {
+            return;
+        }
+
+        $task->update(['status' => TaskStatus::Complete]);
+        $task->recordEvent('status_changed', [
+            'from' => TaskStatus::Review->value,
+            'to' => TaskStatus::Complete->value,
+        ]);
+        $task->recordEvent('approved');
+    }
+
+    public function requestChanges(): void
+    {
+        $task = $this->selectedReviewTask();
+
+        if ($task === null) {
+            return;
+        }
+
+        $note = trim($this->reviewNote);
+
+        if ($note !== '') {
+            $task->comments()->create(['body' => $note]);
+        }
+
+        $task->update(['status' => TaskStatus::Ready]);
+        $task->recordEvent('status_changed', [
+            'from' => TaskStatus::Review->value,
+            'to' => TaskStatus::Ready->value,
+        ]);
+        $task->recordEvent('changes_requested', $note !== '' ? ['note' => $note] : null);
+
+        $this->reset('reviewNote');
+    }
+
+    public function retryTask(): void
+    {
+        if ($this->selectedTaskId === null) {
+            return;
+        }
+
+        $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+
+        if ($task->status !== TaskStatus::Blocked) {
+            return;
+        }
+
+        $task->update(['status' => TaskStatus::Ready]);
+        $task->recordEvent('status_changed', [
+            'from' => TaskStatus::Blocked->value,
+            'to' => TaskStatus::Ready->value,
+        ]);
+        $task->recordEvent('retry_requested');
+    }
+
+    private function selectedReviewTask(): ?Task
+    {
+        if ($this->selectedTaskId === null) {
+            return null;
+        }
+
+        $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+
+        return $task->status === TaskStatus::Review ? $task : null;
+    }
+
     public function deleteTask(): void
     {
         if ($this->selectedTaskId === null) {
@@ -190,7 +263,7 @@ class Board extends Component
             ->groupBy(fn (Task $task) => $task->status->value);
 
         $selectedTask = $this->selectedTaskId !== null
-            ? $this->profile->tasks()->with(['events', 'runs'])->find($this->selectedTaskId)
+            ? $this->profile->tasks()->with(['events', 'runs', 'comments'])->find($this->selectedTaskId)
             : null;
 
         return view('livewire.board', [
