@@ -57,6 +57,9 @@ class ProcessClaudeRunner implements ClaudeRunner
         /** @var array<int, string> $disallowed */
         $disallowed = $options['disallowed_tools'] ?? [];
 
+        /** @var array<int, string> $allowed */
+        $allowed = $options['allowed_tools'] ?? [];
+
         $command = [
             $binary,
             '-p', $prompt,
@@ -64,6 +67,13 @@ class ProcessClaudeRunner implements ClaudeRunner
             '--permission-mode', $permissionMode,
             '--model', $model,
         ];
+
+        if ($allowed !== []) {
+            $command[] = '--allowedTools';
+            foreach (array_values($allowed) as $pattern) {
+                $command[] = (string) $pattern;
+            }
+        }
 
         if ($disallowed !== []) {
             $command[] = '--disallowedTools';

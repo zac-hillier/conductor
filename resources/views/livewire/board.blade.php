@@ -189,6 +189,56 @@
                             Retry
                         </flux:button>
                     </div>
+                @elseif (in_array($selectedTask->status, [\App\Enums\TaskStatus::Backlog, \App\Enums\TaskStatus::Research], true))
+                    <div class="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        <flux:button
+                            variant="primary"
+                            icon="sparkles"
+                            class="w-full"
+                            wire:click="scopeTask"
+                        >
+                            Scope with agent
+                        </flux:button>
+                        <p class="mt-2 text-xs text-zinc-400">Runs a read-only session to refine the brief or ask clarifying questions.</p>
+                    </div>
+                @elseif ($selectedTask->status === \App\Enums\TaskStatus::Scoping)
+                    <div class="flex items-center gap-2 border-t border-zinc-200 pt-4 text-sm text-indigo-600 dark:border-zinc-700 dark:text-indigo-400">
+                        <span class="relative flex h-2 w-2">
+                            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75"></span>
+                            <span class="relative inline-flex h-2 w-2 rounded-full bg-indigo-500"></span>
+                        </span>
+                        Scoping…
+                    </div>
+                @elseif ($selectedTask->status === \App\Enums\TaskStatus::NeedsInput)
+                    <div class="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        <flux:subheading>Scoping conversation</flux:subheading>
+                        <div class="space-y-2">
+                            @foreach ($selectedTask->comments->sortBy('id') as $comment)
+                                <div
+                                    wire:key="thread-{{ $comment->id }}"
+                                    @class([
+                                        'rounded-md p-2 text-sm',
+                                        'bg-indigo-50 text-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200' => $comment->isAgent(),
+                                        'bg-zinc-50 text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300' => ! $comment->isAgent(),
+                                    ])
+                                >
+                                    <span class="text-xs font-medium uppercase tracking-wide opacity-70">{{ $comment->isAgent() ? 'Agent' : 'You' }}</span>
+                                    <p class="mt-0.5 whitespace-pre-wrap">{{ $comment->body }}</p>
+                                </div>
+                            @endforeach
+                        </div>
+                        <flux:textarea wire:model="scopeAnswer" label="Your answer" rows="3" placeholder="Answer the questions to continue scoping" />
+                        <div class="flex justify-end">
+                            <flux:button
+                                variant="primary"
+                                size="sm"
+                                icon="paper-airplane"
+                                wire:click="continueScoping"
+                            >
+                                Send &amp; continue scoping
+                            </flux:button>
+                        </div>
+                    </div>
                 @endif
 
                 @if ($selectedTask->runs->isNotEmpty())
@@ -233,7 +283,7 @@
                         @foreach ($selectedTask->comments as $comment)
                             <div wire:key="comment-{{ $comment->id }}" class="rounded-md bg-zinc-50 p-2 text-sm text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300">
                                 <p class="whitespace-pre-wrap">{{ $comment->body }}</p>
-                                <span class="text-xs text-zinc-400">{{ $comment->created_at->format('d/m/Y H:i') }}</span>
+                                <span class="text-xs text-zinc-400">{{ $comment->isAgent() ? 'Agent' : 'Human' }} · {{ $comment->created_at->format('d/m/Y H:i') }}</span>
                             </div>
                         @endforeach
                     </div>

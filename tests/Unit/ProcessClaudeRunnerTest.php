@@ -50,6 +50,39 @@ it('includes permission mode and disallowed tools when options are set', functio
         ->toContain('--disallowedTools');
 });
 
+it('appends allowed tools for a read-only scoping run and omits edit/bash tools', function () {
+    $runner = new ProcessClaudeRunner;
+
+    $command = $runner->buildCommand('scope this', [
+        'allowed_tools' => ['Read', 'Grep', 'Glob'],
+    ]);
+
+    expect($command)->toContain('--allowedTools')
+        ->toContain('Read')
+        ->toContain('Grep')
+        ->toContain('Glob')
+        ->toContain('--output-format')
+        ->not->toContain('--disallowedTools')
+        ->not->toContain('Edit')
+        ->not->toContain('Write')
+        ->not->toContain('Bash');
+
+    $string = $runner->commandString('scope this', [
+        'allowed_tools' => ['Read', 'Grep', 'Glob'],
+    ]);
+
+    expect($string)->toContain('--allowedTools')
+        ->toContain('--output-format');
+});
+
+it('omits the allowed tools flag when the list is empty', function () {
+    $command = (new ProcessClaudeRunner)->buildCommand('go', [
+        'allowed_tools' => [],
+    ]);
+
+    expect($command)->not->toContain('--allowedTools');
+});
+
 it('omits the disallowed tools flag when the list is empty', function () {
     $command = (new ProcessClaudeRunner)->buildCommand('go', [
         'permission_mode' => 'bypassPermissions',

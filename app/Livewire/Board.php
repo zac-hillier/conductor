@@ -4,8 +4,10 @@ namespace App\Livewire;
 
 use App\Enums\TaskStatus;
 use App\Jobs\RunTaskJob;
+use App\Jobs\ScopeTaskJob;
 use App\Models\Profile;
 use App\Models\Task;
+use App\Models\TaskComment;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -36,6 +38,8 @@ class Board extends Component
     public string $editStatus = TaskStatus::Backlog->value;
 
     public string $reviewNote = '';
+
+    public string $scopeAnswer = '';
 
     public function mount(Profile $profile): void
     {
@@ -162,6 +166,61 @@ class Board extends Component
         }
 
         RunTaskJob::dispatch($task);
+    }
+
+    public function scopeTask(): void
+    {
+        if ($this->selectedTaskId === null) {
+            return;
+        }
+
+        $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+
+        if (! in_array($task->status, [TaskStatus::Backlog, TaskStatus::Research], true)) {
+            return;
+        }
+
+        $this->beginScoping($task);
+    }
+
+    public function continueScoping(): void
+    {
+        if ($this->selectedTaskId === null) {
+            return;
+        }
+
+        $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+
+        if ($task->status !== TaskStatus::NeedsInput) {
+            return;
+        }
+
+        $answer = trim($this->scopeAnswer);
+
+        if ($answer === '') {
+            return;
+        }
+
+        $task->comments()->create([
+            'author' => TaskComment::AUTHOR_HUMAN,
+            'body' => $answer,
+        ]);
+
+        $this->reset('scopeAnswer');
+
+        $this->beginScoping($task);
+    }
+
+    private function beginScoping(Task $task): void
+    {
+        $from = $task->status;
+        $task->update(['status' => TaskStatus::Scoping]);
+        $task->recordEvent('status_changed', [
+            'from' => $from->value,
+            'to' => TaskStatus::Scoping->value,
+        ]);
+
+        ScopeTaskJob::dispatch($task);
     }
 
     public function approveTask(): void

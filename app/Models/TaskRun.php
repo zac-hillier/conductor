@@ -10,6 +10,7 @@ class TaskRun extends Model
     protected $fillable = [
         'task_id',
         'attempt',
+        'kind',
         'started_at',
         'finished_at',
         'outcome',

@@ -50,6 +50,58 @@ class FakeClaudeRunner implements ClaudeRunner
         );
     }
 
+    /**
+     * Build a successful result whose `result` is the given JSON payload string.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public static function json(array $payload): ClaudeResult
+    {
+        $result = (string) json_encode($payload);
+
+        return new ClaudeResult(
+            isError: false,
+            result: $result,
+            sessionId: 'sess-scope-789',
+            costUsd: 0.0185,
+            inputTokens: 900,
+            outputTokens: 300,
+            numTurns: 2,
+            durationMs: 2100,
+            rawJson: (string) json_encode([
+                'is_error' => false,
+                'result' => $result,
+                'session_id' => 'sess-scope-789',
+                'total_cost_usd' => 0.0185,
+                'usage' => ['input_tokens' => 900, 'output_tokens' => 300],
+                'num_turns' => 2,
+                'duration_ms' => 2100,
+            ]),
+        );
+    }
+
+    /**
+     * Build a successful result whose `result` is arbitrary (non-JSON) text.
+     */
+    public static function text(string $text): ClaudeResult
+    {
+        return new ClaudeResult(
+            isError: false,
+            result: $text,
+            sessionId: 'sess-scope-text',
+            costUsd: 0.0099,
+            inputTokens: 500,
+            outputTokens: 120,
+            rawJson: (string) json_encode([
+                'is_error' => false,
+                'result' => $text,
+                'session_id' => 'sess-scope-text',
+                'total_cost_usd' => 0.0099,
+                'usage' => ['input_tokens' => 500, 'output_tokens' => 120],
+            ]),
+        );
+    }
+
     public static function error(): ClaudeResult
     {
         return new ClaudeResult(
