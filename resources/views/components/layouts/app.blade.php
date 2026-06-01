@@ -9,7 +9,7 @@
     @fluxAppearance
 </head>
 <body class="min-h-full bg-zinc-50 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-    <main class="mx-auto max-w-7xl px-6 py-10">
+    <main class="w-full px-6 py-10">
         {{ $slot }}
     </main>
 

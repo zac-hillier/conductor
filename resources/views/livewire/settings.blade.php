@@ -1,4 +1,4 @@
-<div>
+<div class="mx-auto max-w-7xl">
     <div class="flex items-center justify-between gap-3">
         <flux:button href="{{ route('profiles.board', $profile) }}" variant="ghost" size="sm" icon="arrow-left" wire:navigate>
             Board

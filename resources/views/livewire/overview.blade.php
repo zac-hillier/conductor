@@ -1,4 +1,4 @@
-<div>
+<div class="mx-auto max-w-7xl">
     <div class="flex items-center justify-between">
         <div>
             <flux:heading size="xl">Conductor</flux:heading>

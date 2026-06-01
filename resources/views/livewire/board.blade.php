@@ -25,8 +25,20 @@
         <flux:subheading>Board</flux:subheading>
     </div>
 
-    <div class="mt-8 flex gap-4 overflow-x-auto pb-4" wire:ignore.self>
-        @foreach ($columns as $column)
+    @php
+        $populated = [];
+        $empty = [];
+        foreach ($columns as $column) {
+            if (($tasks[$column->value] ?? collect())->count() > 0) {
+                $populated[] = $column;
+            } else {
+                $empty[] = $column;
+            }
+        }
+    @endphp
+
+    <div class="mt-8 flex items-start gap-4 overflow-x-auto pb-4" wire:ignore.self>
+        @foreach ($populated as $column)
             <div class="flex w-72 shrink-0 flex-col">
                 <div class="flex items-center gap-2 pt-2">
                     <flux:badge size="sm" color="{{ $column->color() }}">{{ $column->label() }}</flux:badge>
@@ -77,6 +89,27 @@
                 </div>
             </div>
         @endforeach
+
+        @if (count($empty) > 0)
+            <div class="flex w-56 shrink-0 flex-col">
+                <div class="flex items-center gap-2 pt-2">
+                    <span class="text-xs font-medium uppercase tracking-wide text-zinc-400">Empty</span>
+                    <span class="text-xs text-zinc-400">{{ count($empty) }}</span>
+                </div>
+                <div class="mt-3 space-y-2">
+                    @foreach ($empty as $column)
+                        <div
+                            class="flex min-h-10 items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-200 bg-zinc-100/50 px-3 py-2 transition hover:border-zinc-300 dark:border-zinc-700/70 dark:bg-zinc-800/30"
+                            data-board-column
+                            data-status="{{ $column->value }}"
+                        >
+                            <flux:badge size="sm" color="{{ $column->color() }}">{{ $column->label() }}</flux:badge>
+                            <span class="text-xs text-zinc-400">0</span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 
     {{-- Create task --}}
