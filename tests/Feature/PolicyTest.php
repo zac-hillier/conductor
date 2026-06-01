@@ -3,6 +3,7 @@
 use App\Enums\ProfileKind;
 use App\Livewire\Overview;
 use App\Models\Profile;
+use App\Support\PolicyDefaults;
 
 it('seeds a policy of the right kind when a profile is created', function () {
     $personal = Profile::factory()->personal()->create();
@@ -11,7 +12,7 @@ it('seeds a policy of the right kind when a profile is created', function () {
     expect($personal->policy)->not->toBeNull()
         ->and($personal->policy->permissionMode())->toBe('bypassPermissions')
         ->and($personal->policy->requiresReview())->toBeFalse()
-        ->and($personal->policy->disallowedTools())->toBe([]);
+        ->and($personal->policy->disallowedTools())->toBe(PolicyDefaults::RESTRICTED_TOOLS);
 
     expect($customer->policy)->not->toBeNull()
         ->and($customer->policy->permissionMode())->toBe('acceptEdits')

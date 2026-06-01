@@ -96,7 +96,7 @@ it('auto-completes a personal task and passes bypass permissions to the runner',
     $task->refresh();
     expect($task->status)->toBe(TaskStatus::Complete)
         ->and($fake->lastOptions['permission_mode'])->toBe('bypassPermissions')
-        ->and($fake->lastOptions['disallowed_tools'])->toBe([]);
+        ->and($fake->lastOptions['disallowed_tools'])->toBe(\App\Support\PolicyDefaults::RESTRICTED_TOOLS);
 
     expect($task->events()->where('kind', 'completed')->exists())->toBeTrue();
 });

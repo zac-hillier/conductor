@@ -112,19 +112,29 @@
         @endif
     </div>
 
-    {{-- Create task --}}
-    <flux:modal wire:model.self="showCreate" name="create-task" class="md:w-96">
-        <form wire:submit="createTask" class="space-y-6">
-            <div>
+    {{-- Create task (full-screen flyout, matching the detail view) --}}
+    <flux:modal
+        variant="flyout"
+        position="right"
+        wire:model.self="showCreate"
+        name="create-task"
+        class="w-screen max-w-none border-0 p-0"
+    >
+        <form wire:submit="createTask" class="flex h-dvh flex-col">
+            <div class="border-b border-zinc-200 px-6 py-4 pe-16 dark:border-zinc-700">
                 <flux:heading size="lg">New task</flux:heading>
-                <flux:subheading>Starts in Backlog.</flux:subheading>
+                <flux:subheading>Starts in Backlog — scope it with an agent next.</flux:subheading>
             </div>
 
-            <flux:input wire:model="title" label="Title" placeholder="Short summary of the work" />
-            <flux:textarea wire:model="summary" label="Summary" rows="3" />
-            <flux:input wire:model="priority" type="number" min="1" max="100" label="Priority (1–100)" />
+            <div class="flex-1 overflow-y-auto px-6 py-6">
+                <div class="mx-auto w-full max-w-2xl space-y-6">
+                    <flux:input wire:model="title" label="Title" placeholder="Short summary of the work" />
+                    <flux:textarea wire:model="summary" label="Summary" rows="12" placeholder="What needs doing, context, links…" />
+                    <flux:input wire:model="priority" type="number" min="1" max="100" label="Priority (1–100)" class="max-w-40" />
+                </div>
+            </div>
 
-            <div class="flex justify-end gap-2">
+            <div class="flex justify-end gap-2 border-t border-zinc-200 px-6 py-4 dark:border-zinc-700">
                 <flux:modal.close>
                     <flux:button variant="ghost">Cancel</flux:button>
                 </flux:modal.close>
