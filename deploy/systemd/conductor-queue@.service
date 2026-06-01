@@ -1,0 +1,14 @@
+[Unit]
+Description=Conductor queue worker (%i)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/zac/conductor
+Environment=PATH=/home/zac/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/php /home/zac/conductor/artisan queue:work --sleep=3 --tries=1 --timeout=900 --max-time=3600
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
