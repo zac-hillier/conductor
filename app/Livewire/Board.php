@@ -65,6 +65,29 @@ class Board extends Component
         return $inFlight ? '3s' : '10s';
     }
 
+    /**
+     * Whether the board should be polling right now. Polls on the board, and
+     * while the drawer is open ONLY on a scoping task (so the agent's questions
+     * arrive live). Paused for the create modal and for editing/answering a
+     * non-scoping task, so typing/focus isn't disrupted.
+     */
+    public function shouldPoll(): bool
+    {
+        if ($this->showCreate) {
+            return false;
+        }
+
+        if ($this->showDetail) {
+            return $this->selectedTaskId !== null
+                && $this->profile->tasks()
+                    ->whereKey($this->selectedTaskId)
+                    ->where('status', TaskStatus::Scoping->value)
+                    ->exists();
+        }
+
+        return true;
+    }
+
     public function createTask(): void
     {
         $validated = $this->validate([

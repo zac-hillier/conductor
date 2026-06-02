@@ -1,4 +1,4 @@
-<div @if (! $showDetail && ! $showCreate) wire:poll.{{ $this->pollInterval() }} @endif>
+<div @if ($this->shouldPoll()) wire:poll.{{ $this->pollInterval() }} @endif>
     <div class="flex items-center justify-between gap-3">
         <flux:button href="{{ route('overview') }}" variant="ghost" size="sm" icon="arrow-left" wire:navigate>
             Overview
@@ -89,6 +89,25 @@
                                         <span class="relative inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
                                     </span>
                                     Running
+                                </div>
+                            @endif
+                            @if (in_array($task->status, [\App\Enums\TaskStatus::Backlog, \App\Enums\TaskStatus::Research], true))
+                                <div class="mt-2 flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+                                    <span class="inline-flex h-2 w-2 rounded-full bg-zinc-300 dark:bg-zinc-600"></span>
+                                    Needs scoping
+                                </div>
+                            @elseif ($task->status === \App\Enums\TaskStatus::Scoping)
+                                <div class="mt-2 flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400">
+                                    <span class="relative flex h-2 w-2">
+                                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75"></span>
+                                        <span class="relative inline-flex h-2 w-2 rounded-full bg-indigo-500"></span>
+                                    </span>
+                                    Scoping…
+                                </div>
+                            @elseif ($task->status === \App\Enums\TaskStatus::NeedsInput)
+                                <div class="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                                    <span class="inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+                                    Needs your input
                                 </div>
                             @endif
                         </div>
@@ -336,7 +355,7 @@
                         @elseif ($selectedTask->status === \App\Enums\TaskStatus::NeedsInput)
                             <div class="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
                                 <flux:subheading>Scoping conversation</flux:subheading>
-                                <div class="max-h-[50vh] space-y-2 overflow-y-auto">
+                                <div class="max-h-[50vh] space-y-2 overflow-y-auto" x-data x-init="$nextTick(() => { $el.scrollTop = $el.scrollHeight })">
                                     @foreach ($selectedTask->comments->sortBy('id') as $comment)
                                         <div
                                             wire:key="thread-{{ $comment->id }}"
@@ -358,6 +377,8 @@
                                         size="sm"
                                         icon="paper-airplane"
                                         wire:click="continueScoping"
+                                        wire:target="continueScoping"
+                                        wire:loading.attr="disabled"
                                     >
                                         Send &amp; continue scoping
                                     </flux:button>

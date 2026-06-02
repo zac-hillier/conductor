@@ -44,3 +44,28 @@ it('polls the overview, inbox and activity views', function () {
     Livewire::test(Inbox::class, ['profile' => $profile])->assertSee('wire:poll', false);
     Livewire::test(Activity::class, ['profile' => $profile])->assertSee('wire:poll', false);
 });
+
+it('keeps polling while a scoping task is open in the drawer (live agent replies)', function () {
+    $profile = Profile::factory()->create();
+    $task = Task::factory()->for($profile)->create(['status' => TaskStatus::Scoping]);
+
+    Livewire::test(Board::class, ['profile' => $profile])
+        ->call('selectTask', $task->id)
+        ->assertSee('wire:poll', false);
+});
+
+it('pauses polling when a non-scoping task is open so answering is not disrupted', function () {
+    $profile = Profile::factory()->create();
+    $task = Task::factory()->for($profile)->create(['status' => TaskStatus::NeedsInput]);
+
+    Livewire::test(Board::class, ['profile' => $profile])
+        ->call('selectTask', $task->id)
+        ->assertDontSee('wire:poll', false);
+});
+
+it('shows a needs-scoping affordance on backlog cards', function () {
+    $profile = Profile::factory()->create();
+    Task::factory()->for($profile)->create(['status' => TaskStatus::Backlog]);
+
+    Livewire::test(Board::class, ['profile' => $profile])->assertSee('Needs scoping');
+});
