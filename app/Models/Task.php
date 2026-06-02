@@ -73,6 +73,27 @@ class Task extends Model
         return $this->hasMany(TaskComment::class)->latest('id');
     }
 
+    public function approvals(): HasMany
+    {
+        return $this->hasMany(Approval::class);
+    }
+
+    /**
+     * Capabilities a human has granted for this task. Subtracted from the
+     * profile policy's disallowed-tools set so the next attempt may use them.
+     *
+     * @return array<int, string>
+     */
+    public function grantedCapabilities(): array
+    {
+        return $this->approvals()
+            ->granted()
+            ->pluck('capability')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     public function nextAttempt(): int
     {
         return (int) $this->runs()->max('attempt') + 1;

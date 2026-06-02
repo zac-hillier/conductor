@@ -19,6 +19,43 @@
         <flux:subheading>Inbox — needs attention</flux:subheading>
     </div>
 
+    @if ($approvals->isNotEmpty())
+        <div class="mt-8">
+            <flux:heading size="lg">Pending approvals</flux:heading>
+            <div class="mt-3 space-y-2">
+                @foreach ($approvals as $approval)
+                    <div
+                        wire:key="approval-{{ $approval->id }}"
+                        class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30"
+                    >
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-zinc-400">{{ $approval->task->ref }}</span>
+                                    <flux:badge size="sm" color="amber">{{ $approval->capability }}</flux:badge>
+                                </div>
+                                @if ($approval->command)
+                                    <p class="mt-1 font-mono text-xs text-zinc-600 dark:text-zinc-300">{{ $approval->command }}</p>
+                                @endif
+                                @if ($approval->reason)
+                                    <p class="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{{ $approval->reason }}</p>
+                                @endif
+                            </div>
+                            <div class="flex shrink-0 items-center gap-2">
+                                <flux:button size="sm" variant="primary" wire:click="grant({{ $approval->id }})">
+                                    Grant
+                                </flux:button>
+                                <flux:button size="sm" variant="ghost" wire:click="deny({{ $approval->id }})">
+                                    Deny
+                                </flux:button>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     @if ($tasks->isEmpty())
         <flux:callout class="mt-10" icon="check-circle">
             <flux:callout.heading>Nothing needs attention</flux:callout.heading>

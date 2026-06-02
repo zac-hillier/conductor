@@ -66,6 +66,21 @@ class TaskPromptBuilder
             }
         }
 
+        $disallowed = $profile?->policyOrDefault()->disallowedTools() ?? [];
+        if ($disallowed !== []) {
+            $lines[] = '';
+            $lines[] = 'You are NOT permitted to run these tools:';
+            foreach ($disallowed as $tool) {
+                $lines[] = '- '.$tool;
+            }
+            $lines[] = 'If completing the task REQUIRES one of these, do NOT attempt it. Instead, finish what you can and request approval. To request approval, include at the very end of your output a block in exactly this format (one line per request):';
+            $lines[] = '';
+            $lines[] = 'APPROVALS_REQUESTED:';
+            $lines[] = '- <tool-pattern> :: <command you would run> :: <why you need it>';
+            $lines[] = '';
+            $lines[] = 'The <tool-pattern> must be one of the disallowed patterns listed above. A human will grant or deny, and the task may be re-run with the capability permitted.';
+        }
+
         $lines[] = '';
         $lines[] = 'Complete the task in this working directory. When finished, give a concise summary of what you changed.';
 

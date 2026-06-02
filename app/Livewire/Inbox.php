@@ -3,6 +3,8 @@
 namespace App\Livewire;
 
 use App\Enums\TaskStatus;
+use App\Jobs\RunTaskJob;
+use App\Models\Approval;
 use App\Models\Profile;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -28,6 +30,69 @@ class Inbox extends Component
         $this->profile = $profile;
     }
 
+    public function grant(int $approvalId): void
+    {
+        $approval = $this->pendingApproval($approvalId);
+
+        if ($approval === null) {
+            return;
+        }
+
+        $approval->update([
+            'decision' => 'granted',
+            'decided_at' => now(),
+        ]);
+
+        $task = $approval->task;
+        $task->recordEvent('approval_granted', [
+            'capability' => $approval->capability,
+        ]);
+
+        // Re-run with the granted capability now permitted. A review task is
+        // promoted back to ready first so the standard claim path applies.
+        if ($task->status === TaskStatus::Review) {
+            $task->update(['status' => TaskStatus::Ready]);
+            $task->recordEvent('status_changed', [
+                'from' => TaskStatus::Review->value,
+                'to' => TaskStatus::Ready->value,
+            ]);
+        }
+
+        if ($task->claim()) {
+            RunTaskJob::dispatch($task);
+        }
+    }
+
+    public function deny(int $approvalId): void
+    {
+        $approval = $this->pendingApproval($approvalId);
+
+        if ($approval === null) {
+            return;
+        }
+
+        $approval->update([
+            'decision' => 'denied',
+            'decided_at' => now(),
+        ]);
+
+        $approval->task->recordEvent('approval_denied', [
+            'capability' => $approval->capability,
+        ]);
+    }
+
+    /**
+     * A pending approval belonging to this profile, or null.
+     */
+    private function pendingApproval(int $approvalId): ?Approval
+    {
+        return Approval::query()
+            ->pending()
+            ->whereKey($approvalId)
+            ->whereHas('task', fn ($query) => $query->where('profile_id', $this->profile->id))
+            ->first();
+    }
+
     public function render()
     {
         $tasks = $this->profile->tasks()
@@ -36,8 +101,16 @@ class Inbox extends Component
             ->orderByDesc('updated_at')
             ->get();
 
+        $approvals = Approval::query()
+            ->pending()
+            ->whereHas('task', fn ($query) => $query->where('profile_id', $this->profile->id))
+            ->with('task')
+            ->orderByDesc('id')
+            ->get();
+
         return view('livewire.inbox', [
             'tasks' => $tasks,
+            'approvals' => $approvals,
         ]);
     }
 }

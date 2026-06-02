@@ -84,9 +84,14 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
             $workdir = $task->profile->workdir ?? base_path();
             $policy = $task->profile->policyOrDefault();
 
+            $disallowed = array_values(array_diff(
+                $policy->disallowedTools(),
+                $task->grantedCapabilities(),
+            ));
+
             $result = $runner->run($prompt, $workdir, [
                 'permission_mode' => $policy->permissionMode(),
-                'disallowed_tools' => $policy->disallowedTools(),
+                'disallowed_tools' => $disallowed,
             ]);
 
             $logRef = $this->writeLog($run->id, $result->rawJson);
@@ -118,6 +123,37 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
                 ]);
 
                 Notifier::taskAttention($task->fresh(), 'run_failed');
+
+                return;
+            }
+
+            $requests = $this->parseApprovalRequests($result->result);
+
+            if ($requests !== []) {
+                foreach ($requests as $request) {
+                    $task->approvals()->create([
+                        'run_id' => $run->id,
+                        'capability' => $request['capability'],
+                        'command' => $request['command'],
+                        'reason' => $request['reason'],
+                        'decision' => 'pending',
+                    ]);
+                }
+
+                $task->update(['status' => TaskStatus::Review]);
+                $task->recordEvent('status_changed', [
+                    'from' => TaskStatus::Processing->value,
+                    'to' => TaskStatus::Review->value,
+                ]);
+                $task->recordEvent('run_completed', [
+                    'attempt' => $run->attempt,
+                    'cost' => $result->costUsd,
+                    'tokens' => $result->totalTokens(),
+                    'session_id' => $result->sessionId,
+                ]);
+                $task->recordEvent('approvals_requested', ['count' => count($requests)]);
+
+                Notifier::taskAttention($task->fresh(), 'review');
 
                 return;
             }
@@ -165,6 +201,56 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
 
             Notifier::taskAttention($task->fresh(), 'run_failed');
         }
+    }
+
+    /**
+     * Parse an APPROVALS_REQUESTED block from worker output. The header is
+     * matched case-insensitively; the following `- a :: b :: c` lines are
+     * collected until a blank line or end of input.
+     *
+     * @return array<int, array{capability: string, command: ?string, reason: ?string}>
+     */
+    private function parseApprovalRequests(string $text): array
+    {
+        $lines = preg_split('/\R/', $text) ?: [];
+        $requests = [];
+        $inBlock = false;
+
+        foreach ($lines as $line) {
+            if (! $inBlock) {
+                if (preg_match('/^\s*APPROVALS_REQUESTED:\s*$/i', $line) === 1) {
+                    $inBlock = true;
+                }
+
+                continue;
+            }
+
+            $trimmed = trim($line);
+
+            if ($trimmed === '') {
+                break;
+            }
+
+            if (! str_starts_with($trimmed, '-')) {
+                break;
+            }
+
+            $body = trim(ltrim($trimmed, '-'));
+            $parts = array_map('trim', explode('::', $body));
+
+            $capability = $parts[0] ?? '';
+            if ($capability === '') {
+                continue;
+            }
+
+            $requests[] = [
+                'capability' => $capability,
+                'command' => ($parts[1] ?? '') !== '' ? $parts[1] : null,
+                'reason' => ($parts[2] ?? '') !== '' ? $parts[2] : null,
+            ];
+        }
+
+        return $requests;
     }
 
     private function writeLog(int $runId, string $contents): string
