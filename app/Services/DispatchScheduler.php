@@ -52,6 +52,13 @@ class DispatchScheduler
             $dispatched = [];
 
             foreach ($candidates as $task) {
+                // Never auto-dispatch a task without a valid resolved working
+                // directory — the worker would run in the wrong place. Leave it
+                // ready; manual dispatch surfaces the same guard on-screen.
+                if (! $task->hasValidWorkdir()) {
+                    continue;
+                }
+
                 if ($dryRun) {
                     $dispatched[] = $task->ref;
 

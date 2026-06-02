@@ -72,6 +72,24 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        // Never run a worker without a valid project home — an empty workdir
+        // would execute in Conductor's own directory. Block with a clear
+        // explanation rather than running in the wrong place.
+        if (! $task->hasValidWorkdir()) {
+            $task->update(['status' => TaskStatus::Blocked]);
+            $task->recordEvent('status_changed', [
+                'from' => TaskStatus::Processing->value,
+                'to' => TaskStatus::Blocked->value,
+            ]);
+            $task->recordEvent('workdir_invalid', [
+                'workdir' => $task->resolvedWorkdir(),
+            ]);
+
+            Notifier::taskAttention($task->fresh(), 'blocked');
+
+            return;
+        }
+
         $run = $task->runs()->create([
             'attempt' => $task->nextAttempt(),
             'started_at' => now(),
@@ -81,11 +99,11 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
 
         try {
             $prompt = $promptBuilder->build($task);
-            $workdir = $task->profile->workdir ?? base_path();
+            $workdir = (string) $task->resolvedWorkdir();
             $policy = $task->profile->policyOrDefault();
 
             $disallowed = array_values(array_diff(
-                $policy->disallowedTools(),
+                array_merge($policy->disallowedTools(), $task->referenceGuards()),
                 $task->grantedCapabilities(),
             ));
 

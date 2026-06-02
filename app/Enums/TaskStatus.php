@@ -31,6 +31,27 @@ enum TaskStatus: string
         };
     }
 
+    /**
+     * A one-line, human-facing explanation of what this status means and what
+     * (if anything) is happening in the background — surfaced in the drawer so
+     * the human always knows what the coordinator is doing.
+     */
+    public function description(): string
+    {
+        return match ($this) {
+            self::Backlog => 'Parked — not yet scoped.',
+            self::Research => 'Gathering understanding before scoping.',
+            self::Scoping => 'An agent is interrogating this task to define it.',
+            self::NeedsInput => 'Waiting for your answer to continue scoping.',
+            self::Ready => 'Defined and eligible for dispatch.',
+            self::Processing => 'A worker is executing this task now.',
+            self::Blocked => 'Stuck — needs your attention before it can continue.',
+            self::Review => 'Worker finished — awaiting your sign-off.',
+            self::Complete => 'Done.',
+            self::Archived => 'Archived.',
+        };
+    }
+
     public function color(): string
     {
         return match ($this) {

@@ -11,6 +11,8 @@ class Settings extends Component
 {
     public Profile $profile;
 
+    public string $workdir = '';
+
     public string $permissionMode = 'default';
 
     public bool $requireReview = false;
@@ -31,6 +33,7 @@ class Settings extends Component
     public function mount(Profile $profile): void
     {
         $this->profile = $profile;
+        $this->workdir = (string) $profile->workdir;
 
         $policy = $profile->policyOrDefault();
         $this->permissionMode = $policy->permissionMode();
@@ -43,6 +46,15 @@ class Settings extends Component
     public function save(): void
     {
         $validated = $this->validate([
+            'workdir' => ['required', 'string', function (string $attribute, mixed $value, callable $fail): void {
+                $dir = trim((string) $value);
+
+                if ($dir === '' || ! is_dir($dir)) {
+                    $fail('The project home must be an existing directory.');
+                } elseif (! is_writable($dir)) {
+                    $fail('The project home must be writable.');
+                }
+            }],
             'permissionMode' => ['required', 'in:'.implode(',', self::PERMISSION_MODES)],
             'requireReview' => ['boolean'],
             'autoDispatch' => ['boolean'],
@@ -68,7 +80,10 @@ class Settings extends Component
             ['rules' => $rules],
         );
 
-        $this->profile->update(['concurrency_cap' => $validated['concurrencyCap']]);
+        $this->profile->update([
+            'workdir' => trim($validated['workdir']),
+            'concurrency_cap' => $validated['concurrencyCap'],
+        ]);
 
         $this->profile->refresh();
         $this->saved = true;

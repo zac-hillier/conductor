@@ -5,6 +5,9 @@
         </flux:button>
 
         <div class="flex items-center gap-2">
+            <flux:button href="{{ route('profiles.projects', $profile) }}" variant="ghost" size="sm" icon="folder" wire:navigate>
+                Projects
+            </flux:button>
             <flux:button href="{{ route('profiles.inbox', $profile) }}" variant="ghost" size="sm" icon="inbox" wire:navigate>
                 Inbox
             </flux:button>
@@ -63,6 +66,9 @@
                                 </flux:badge>
                             </div>
                             <p class="mt-1 truncate text-sm font-medium">{{ $task->title }}</p>
+                            @if ($projects->count() > 1 && $task->project)
+                                <p class="mt-0.5 truncate text-xs text-zinc-400">{{ $task->project->name }}</p>
+                            @endif
                             @if ($task->status === \App\Enums\TaskStatus::Ready)
                                 @if ($task->readiness_score !== null)
                                     @php($light = $task->readiness_detail['light'] ?? 'red')
@@ -156,6 +162,13 @@
                 <div class="mx-auto w-full max-w-2xl space-y-6">
                     <flux:input wire:model="title" label="Title" placeholder="Short summary of the work" />
                     <flux:textarea wire:model="summary" label="Summary" rows="12" placeholder="What needs doing, context, links…" />
+                    @if ($projects->count() > 1)
+                        <flux:select wire:model="createProjectId" label="Project" class="max-w-sm">
+                            @foreach ($projects as $project)
+                                <flux:select.option value="{{ $project->id }}">{{ $project->name }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+                    @endif
                     <flux:input wire:model="priority" type="number" min="1" max="100" label="Priority (1–100)" class="max-w-40" />
                 </div>
             </div>
@@ -189,6 +202,14 @@
                 <div class="grid flex-1 grid-cols-1 gap-6 overflow-y-auto p-6 lg:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)] lg:gap-8 lg:overflow-hidden">
                     {{-- Main column --}}
                     <div class="space-y-6 lg:overflow-y-auto lg:pe-2">
+                        @php($backgroundBusy = $selectedTask->status === \App\Enums\TaskStatus::Processing || $selectedTask->hasActiveScopeRun())
+
+                        @if ($actionNotice)
+                            <flux:callout variant="secondary" icon="information-circle">
+                                <flux:callout.text>{{ $actionNotice }}</flux:callout.text>
+                            </flux:callout>
+                        @endif
+
                         <form wire:submit="updateTask" class="space-y-4">
                             <flux:input wire:model="editTitle" label="Title" />
                             <flux:textarea wire:model="editSummary" label="Summary" rows="6" />
@@ -201,7 +222,9 @@
                                 </flux:select>
                             </div>
 
-                            <div class="flex justify-between gap-2 pt-2">
+                            <flux:text size="sm" class="text-zinc-400">{{ $selectedTask->status->description() }}</flux:text>
+
+                            <div class="flex items-center justify-between gap-2 pt-2">
                                 <flux:button
                                     type="button"
                                     variant="danger"
@@ -212,7 +235,12 @@
                                 >
                                     Delete
                                 </flux:button>
-                                <flux:button type="submit" variant="primary" size="sm">Save changes</flux:button>
+                                <div class="flex items-center gap-3">
+                                    @if ($backgroundBusy)
+                                        <span class="text-xs text-zinc-400">Working in the background — saving is paused.</span>
+                                    @endif
+                                    <flux:button type="submit" variant="primary" size="sm" :disabled="$backgroundBusy">Save changes</flux:button>
+                                </div>
                             </div>
                         </form>
 
@@ -478,6 +506,31 @@
                                         </ul>
                                     </div>
                                 @endif
+                            </div>
+                        @endif
+
+                        @if (count($availableDocs) > 0)
+                            @php($pinned = $selectedTask->pinned_docs ?? [])
+                            <div class="space-y-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                                <flux:subheading>Context docs</flux:subheading>
+                                <p class="text-xs text-zinc-400">Pin a doc to always include its body in this task's prompts. Reference docs are read-only.</p>
+                                @foreach ($availableDocs as $doc)
+                                    @php($isPinned = in_array($doc['path'], $pinned, true))
+                                    <div wire:key="doc-{{ md5($doc['path']) }}" class="flex items-center justify-between gap-2 text-sm">
+                                        <span class="flex min-w-0 items-center gap-2">
+                                            <flux:badge size="sm" color="{{ $doc['role'] === 'reference' ? 'amber' : 'sky' }}">{{ $doc['role'] }}</flux:badge>
+                                            <span class="truncate">{{ $doc['name'] }}</span>
+                                        </span>
+                                        <flux:button
+                                            variant="{{ $isPinned ? 'primary' : 'ghost' }}"
+                                            size="xs"
+                                            icon="{{ $isPinned ? 'bookmark-slash' : 'bookmark' }}"
+                                            wire:click="togglePin('{{ addslashes($doc['path']) }}')"
+                                        >
+                                            {{ $isPinned ? 'Pinned' : 'Pin' }}
+                                        </flux:button>
+                                    </div>
+                                @endforeach
                             </div>
                         @endif
 

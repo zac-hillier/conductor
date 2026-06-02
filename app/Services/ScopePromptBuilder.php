@@ -7,10 +7,7 @@ use App\Models\TaskComment;
 
 class ScopePromptBuilder
 {
-    /**
-     * Maximum characters read from each context file in the workdir.
-     */
-    private const CONTEXT_FILE_LIMIT = 4000;
+    public function __construct(private readonly ProjectContextBuilder $context = new ProjectContextBuilder) {}
 
     public function build(Task $task): string
     {
@@ -21,33 +18,10 @@ class ScopePromptBuilder
         $lines[] = 'You have read-only access (Read, Grep, Glob) to the working directory so you';
         $lines[] = 'can inspect the repository for context. Do not attempt to modify anything.';
 
-        $profile = $task->profile;
-        if ($profile !== null) {
+        $context = $this->context->block($task);
+        if ($context !== []) {
             $lines[] = '';
-            $lines[] = 'Profile context:';
-            $lines[] = '- Name: '.$profile->name;
-            $lines[] = '- Kind: '.$profile->kind->label();
-
-            if (! empty($profile->workdir)) {
-                $lines[] = '- Working directory: '.$profile->workdir;
-            }
-
-            if (! empty($profile->repo_url)) {
-                $lines[] = '- Repository: '.$profile->repo_url;
-            }
-
-            $context = $this->repoContext($profile->workdir);
-            if ($context !== []) {
-                $lines[] = '';
-                $lines[] = 'Project context files (read from the working directory):';
-                foreach ($context as $name => $body) {
-                    $lines[] = '';
-                    $lines[] = '--- '.$name.' ---';
-                    $lines[] = $body;
-                }
-            } else {
-                $lines[] = 'Read README.md, CONDUCTOR.md and CLAUDE.md in the working directory (if present) for project context.';
-            }
+            $lines = array_merge($lines, $context);
         }
 
         $lines[] = '';
@@ -103,36 +77,6 @@ class ScopePromptBuilder
         $lines[] = ' "definition_of_done": string[], "constraints": string[], "target_paths": string[], "rationale": string}';
 
         return implode("\n", $lines);
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function repoContext(?string $workdir): array
-    {
-        if (empty($workdir) || ! is_dir($workdir)) {
-            return [];
-        }
-
-        $context = [];
-
-        foreach (['README.md', 'CONDUCTOR.md', 'CLAUDE.md'] as $name) {
-            $path = rtrim($workdir, '/').'/'.$name;
-
-            if (! is_file($path) || ! is_readable($path)) {
-                continue;
-            }
-
-            $body = (string) file_get_contents($path);
-
-            if (mb_strlen($body) > self::CONTEXT_FILE_LIMIT) {
-                $body = mb_substr($body, 0, self::CONTEXT_FILE_LIMIT).'…';
-            }
-
-            $context[$name] = trim($body);
-        }
-
-        return $context;
     }
 
     /**

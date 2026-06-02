@@ -6,6 +6,8 @@ use App\Models\Task;
 
 class TaskPromptBuilder
 {
+    public function __construct(private readonly ProjectContextBuilder $context = new ProjectContextBuilder) {}
+
     public function build(Task $task): string
     {
         $lines = [];
@@ -13,21 +15,11 @@ class TaskPromptBuilder
         $lines[] = 'You are executing a development task in the current working directory.';
 
         $profile = $task->profile;
-        if ($profile !== null) {
+
+        $context = $this->context->block($task);
+        if ($context !== []) {
             $lines[] = '';
-            $lines[] = 'Profile context:';
-            $lines[] = '- Name: '.$profile->name;
-            $lines[] = '- Kind: '.$profile->kind->label();
-
-            if (! empty($profile->workdir)) {
-                $lines[] = '- Working directory: '.$profile->workdir;
-            }
-
-            if (! empty($profile->repo_url)) {
-                $lines[] = '- Repository: '.$profile->repo_url;
-            }
-
-            $lines[] = 'Before acting, read README.md, CONDUCTOR.md and CLAUDE.md in the working directory (if present) for project context.';
+            $lines = array_merge($lines, $context);
         }
 
         $lines[] = '';

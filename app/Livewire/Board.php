@@ -4,7 +4,6 @@ namespace App\Livewire;
 
 use App\Enums\TaskStatus;
 use App\Jobs\RunTaskJob;
-use App\Jobs\ScopeTaskJob;
 use App\Jobs\ScoreTaskJob;
 use App\Models\Profile;
 use App\Models\Task;
@@ -27,6 +26,9 @@ class Board extends Component
 
     public int $priority = 50;
 
+    // Project the new task will belong to (defaults to the profile's default).
+    public ?int $createProjectId = null;
+
     // Drawer / edit state.
     public ?int $selectedTaskId = null;
 
@@ -46,6 +48,10 @@ class Board extends Component
     public string $reviewNote = '';
 
     public string $scopeAnswer = '';
+
+    // A transient, human-facing note explaining what an action did (or why it
+    // was refused) — the drawer's way of narrating background work back.
+    public ?string $actionNotice = null;
 
     public function mount(Profile $profile): void
     {
@@ -96,7 +102,11 @@ class Board extends Component
             'priority' => ['required', 'integer', 'min:1', 'max:100'],
         ]);
 
+        $projectId = $this->createProjectId
+            ?? $this->profile->defaultProject()?->id;
+
         $task = $this->profile->tasks()->create([
+            'project_id' => $projectId,
             'ref' => $this->nextRef(),
             'title' => $validated['title'],
             'summary' => $validated['summary'] ?: null,
@@ -106,7 +116,7 @@ class Board extends Component
 
         $task->recordEvent('created');
 
-        $this->reset('title', 'summary', 'priority', 'showCreate');
+        $this->reset('title', 'summary', 'priority', 'showCreate', 'createProjectId');
         $this->priority = 50;
     }
 
@@ -146,11 +156,22 @@ class Board extends Component
         $task = $this->profile->tasks()->findOrFail($taskId);
 
         $this->selectedTaskId = $task->id;
+        $this->syncEditFields($task);
+        $this->actionNotice = null;
+        $this->showDetail = true;
+    }
+
+    /**
+     * Re-hydrate the edit form from the task's current truth. Called on select
+     * and after every action that mutates the task, so the form never lags
+     * behind a status the coordinator changed in the background.
+     */
+    private function syncEditFields(Task $task): void
+    {
         $this->editTitle = $task->title;
         $this->editSummary = $task->summary ?? '';
         $this->editPriority = $task->priority;
         $this->editStatus = $task->status->value;
-        $this->showDetail = true;
     }
 
     public function updatedShowDetail(bool $value): void
@@ -170,6 +191,16 @@ class Board extends Component
         ]);
 
         $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+
+        // Guard against clobbering background-owned work: if a worker is running
+        // or a scope run is in flight, the form's status is stale. Re-sync to
+        // truth and refuse the save rather than overwrite live state.
+        if ($task->status === TaskStatus::Processing || $task->hasActiveScopeRun()) {
+            $this->syncEditFields($task);
+            $this->actionNotice = 'This task is being worked on in the background — your changes were not saved, to avoid overwriting it.';
+
+            return;
+        }
 
         $newStatus = TaskStatus::from($validated['editStatus']);
         $oldStatus = $task->status;
@@ -231,8 +262,20 @@ class Board extends Component
             return;
         }
 
+        if (! $this->profile->hasValidWorkdir()) {
+            $this->actionNotice = 'This profile has no valid project home. Set one in Settings before dispatching.';
+
+            return;
+        }
+
         if ($task->claim()) {
             RunTaskJob::dispatch($task);
+
+            // Hand the human back to the board with the task visibly running in
+            // the Processing column, rather than leaving a stale edit form open.
+            $this->showDetail = false;
+            $this->selectedTaskId = null;
+            $this->actionNotice = null;
         }
     }
 
@@ -265,6 +308,9 @@ class Board extends Component
         }
 
         $this->beginScoping($task);
+
+        $this->syncEditFields($task);
+        $this->actionNotice = 'Scoping started — an agent is interrogating this task. Its questions will appear here.';
     }
 
     public function rescope(): void
@@ -280,6 +326,9 @@ class Board extends Component
         }
 
         $task->enterScoping();
+
+        $this->syncEditFields($task->fresh());
+        $this->actionNotice = 'Scoping re-queued — an agent will pick this up shortly.';
     }
 
     public function continueScoping(): void
@@ -308,6 +357,9 @@ class Board extends Component
         $this->reset('scopeAnswer');
 
         $this->beginScoping($task);
+
+        $this->syncEditFields($task);
+        $this->actionNotice = 'Answer sent — scoping resumed with your input.';
     }
 
     private function beginScoping(Task $task): void
@@ -336,6 +388,9 @@ class Board extends Component
             'to' => TaskStatus::Complete->value,
         ]);
         $task->recordEvent('approved');
+
+        $this->syncEditFields($task->fresh());
+        $this->actionNotice = 'Approved — task marked complete.';
     }
 
     public function requestChanges(): void
@@ -360,6 +415,9 @@ class Board extends Component
         $task->recordEvent('changes_requested', $note !== '' ? ['note' => $note] : null);
 
         $this->reset('reviewNote');
+
+        $this->syncEditFields($task->fresh());
+        $this->actionNotice = 'Changes requested — task moved back to Ready.';
     }
 
     public function retryTask(): void
@@ -382,6 +440,9 @@ class Board extends Component
         $task->recordEvent('retry_requested');
 
         $task->enterReady();
+
+        $this->syncEditFields($task->fresh());
+        $this->actionNotice = 'Moved back to Ready for another attempt.';
     }
 
     private function selectedReviewTask(): ?Task
@@ -393,6 +454,52 @@ class Board extends Component
         $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
 
         return $task->status === TaskStatus::Review ? $task : null;
+    }
+
+    /**
+     * Pin or unpin a discovered reference/docs file for the selected task, so
+     * the context builder always includes its body in that task's prompts.
+     */
+    public function togglePin(string $path): void
+    {
+        if ($this->selectedTaskId === null) {
+            return;
+        }
+
+        $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+        $pinned = $task->pinned_docs ?? [];
+
+        $pinned = in_array($path, $pinned, true)
+            ? array_values(array_diff($pinned, [$path]))
+            : [...$pinned, $path];
+
+        $task->update(['pinned_docs' => $pinned]);
+    }
+
+    /**
+     * Reference + docs files discovered for a task's project, for the drawer's
+     * pin toggles.
+     *
+     * @return array<int, array{path: string, role: string, name: string}>
+     */
+    private function availableDocs(?Task $task): array
+    {
+        $map = $task?->project?->context_map ?? [];
+        $docs = [];
+
+        foreach (['reference', 'docs'] as $role) {
+            foreach ($map['roles'][$role] ?? [] as $dir) {
+                foreach (glob(rtrim((string) $dir, '/').'/*.md') ?: [] as $file) {
+                    $docs[] = ['path' => $file, 'role' => $role, 'name' => basename($file)];
+
+                    if (count($docs) >= 50) {
+                        return $docs;
+                    }
+                }
+            }
+        }
+
+        return $docs;
     }
 
     public function deleteTask(): void
@@ -418,20 +525,28 @@ class Board extends Component
     public function render()
     {
         $tasks = $this->profile->tasks()
+            ->with('project')
             ->orderByDesc('priority')
             ->orderBy('created_at')
             ->get()
             ->groupBy(fn (Task $task) => $task->status->value);
 
         $selectedTask = $this->selectedTaskId !== null
-            ? $this->profile->tasks()->with(['events', 'runs', 'comments'])->find($this->selectedTaskId)
+            ? $this->profile->tasks()->with(['events', 'runs', 'comments', 'project'])->find($this->selectedTaskId)
             : null;
+
+        $projects = $this->profile->projects()
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
 
         return view('livewire.board', [
             'columns' => TaskStatus::ordered(),
             'tasks' => $tasks,
             'statuses' => TaskStatus::ordered(),
             'selectedTask' => $selectedTask,
+            'projects' => $projects,
+            'availableDocs' => $this->availableDocs($selectedTask),
         ]);
     }
 }

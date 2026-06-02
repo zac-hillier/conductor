@@ -20,7 +20,7 @@ class ProfileFactory extends Factory
             'slug' => Str::slug($name).'-'.Str::lower(Str::random(5)),
             'name' => $name,
             'kind' => ProfileKind::Customer,
-            'workdir' => null,
+            'workdir' => sys_get_temp_dir(),
             'default_branch' => 'main',
             'repo_url' => null,
             'concurrency_cap' => 3,

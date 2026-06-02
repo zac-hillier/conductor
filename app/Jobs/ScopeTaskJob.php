@@ -41,6 +41,22 @@ class ScopeTaskJob implements ShouldQueue
             return;
         }
 
+        // Without a valid project home an agent would scope against the wrong
+        // directory. Bounce back to needs-input with a clear explanation.
+        if (! $task->hasValidWorkdir()) {
+            $task->comments()->create([
+                'author' => TaskComment::AUTHOR_AGENT,
+                'body' => 'This task has no valid working directory set, so scoping cannot run. Set a project home in the profile or project settings, then scope again.',
+            ]);
+
+            $this->transition($task, TaskStatus::NeedsInput);
+            $task->recordEvent('workdir_invalid', ['workdir' => $task->resolvedWorkdir()]);
+
+            Notifier::taskAttention($task->fresh(), 'needs_input');
+
+            return;
+        }
+
         $run = $task->runs()->create([
             'attempt' => $task->nextAttempt(),
             'kind' => 'scope',
@@ -51,7 +67,7 @@ class ScopeTaskJob implements ShouldQueue
 
         try {
             $prompt = $promptBuilder->build($task);
-            $workdir = $task->profile->workdir ?? base_path();
+            $workdir = (string) $task->resolvedWorkdir();
 
             $result = $runner->run($prompt, $workdir, [
                 'allowed_tools' => self::ALLOWED_TOOLS,

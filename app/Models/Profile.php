@@ -45,6 +45,35 @@ class Profile extends Model
         return $this->hasMany(Task::class);
     }
 
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    /**
+     * The profile's default project — the implicit single project every profile
+     * has (created at backfill / on profile creation). Simple profiles never
+     * need more than this one.
+     */
+    public function defaultProject(): ?Project
+    {
+        return $this->projects()->where('is_default', true)->first()
+            ?? $this->projects()->orderBy('id')->first();
+    }
+
+    /**
+     * Whether this profile has a usable project home: a non-empty path that
+     * exists on disk and is writable. Workers must never run without one — an
+     * empty workdir would otherwise fall back to Conductor's own directory and
+     * write files into the wrong place.
+     */
+    public function hasValidWorkdir(): bool
+    {
+        $dir = is_string($this->workdir) ? trim($this->workdir) : '';
+
+        return $dir !== '' && is_dir($dir) && is_writable($dir);
+    }
+
     /**
      * The persisted policy, or an unsaved default built from the profile kind.
      */

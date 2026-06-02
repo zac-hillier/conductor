@@ -17,6 +17,13 @@
             </flux:callout>
         @endif
 
+        <flux:input
+            wire:model="workdir"
+            label="Project home"
+            placeholder="/home/zac/projects/my-project"
+        />
+        <flux:text size="sm" class="text-zinc-400">Absolute path to this profile's working directory. Workers run here — a task cannot be dispatched until this is a valid, writable directory.</flux:text>
+
         <flux:select wire:model="permissionMode" label="Permission mode">
             @foreach ($modes as $mode)
                 <flux:select.option value="{{ $mode }}">{{ $mode }}</flux:select.option>

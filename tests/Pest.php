@@ -13,5 +13,13 @@ pest()->extend(TestCase::class)
         // its own instance. Tests asserting on the bus use Bus::fake() and
         // never reach this.
         app()->instance(ClaudeRunner::class, new FakeClaudeRunner);
+
+        // Ensure the canonical test working directories exist so the profile
+        // workdir gate (Profile::hasValidWorkdir) passes for tests that set one.
+        foreach (['/tmp/conductor-work', '/tmp/conductor-scope'] as $dir) {
+            if (! is_dir($dir)) {
+                @mkdir($dir, 0777, true);
+            }
+        }
     })
     ->in('Feature', 'Unit');

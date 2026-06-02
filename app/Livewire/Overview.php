@@ -26,10 +26,18 @@ class Overview extends Component
             'kind' => ['required', Rule::enum(ProfileKind::class)],
         ]);
 
-        Profile::create([
+        $profile = Profile::create([
             'name' => $validated['name'],
             'slug' => $this->uniqueSlug($validated['name']),
             'kind' => $validated['kind'],
+        ]);
+
+        // Every profile has an implicit default project (workdir inherits the
+        // profile home until the profile gains additional projects).
+        $profile->projects()->create([
+            'slug' => 'default',
+            'name' => $profile->name,
+            'is_default' => true,
         ]);
 
         $this->reset('name', 'showCreate');

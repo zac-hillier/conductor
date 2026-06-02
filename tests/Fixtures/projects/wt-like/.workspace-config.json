@@ -1,0 +1,7 @@
+{
+  "project_name": "returns",
+  "repos": [
+    { "name": "returns-api", "url": "https://github.com/example/returns-api.git", "default_branch": "main" },
+    { "name": "returns-admin", "url": "https://github.com/example/returns-admin.git", "default_branch": "main" }
+  ]
+}

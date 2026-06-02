@@ -18,12 +18,14 @@ class Task extends Model
 
     protected $fillable = [
         'profile_id',
+        'project_id',
         'ref',
         'title',
         'summary',
         'definition_of_done',
         'constraints',
         'target_paths',
+        'pinned_docs',
         'priority',
         'status',
         'readiness_score',
@@ -38,6 +40,7 @@ class Task extends Model
             'definition_of_done' => 'array',
             'constraints' => 'array',
             'target_paths' => 'array',
+            'pinned_docs' => 'array',
             'readiness_detail' => 'array',
             'priority' => 'integer',
             'readiness_score' => 'integer',
@@ -47,6 +50,59 @@ class Task extends Model
     public function profile(): BelongsTo
     {
         return $this->belongsTo(Profile::class);
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * The working directory a worker should run in for this task: the task's
+     * project workdir if set, else the profile workdir. The single resolution
+     * point used by the jobs, prompt builders, and dispatcher.
+     */
+    public function resolvedWorkdir(): ?string
+    {
+        $projectWorkdir = $this->project?->workdir;
+
+        if (is_string($projectWorkdir) && trim($projectWorkdir) !== '') {
+            return $projectWorkdir;
+        }
+
+        return $this->profile?->workdir;
+    }
+
+    /**
+     * Tool-disallow patterns that protect discovered `reference/` directories
+     * from edits — the frozen end of the doc mutability spectrum. Merged into
+     * the worker's disallowed tools so a write there is blocked unless the
+     * human has explicitly granted it (which lifts the matching pattern).
+     *
+     * @return array<int, string>
+     */
+    public function referenceGuards(): array
+    {
+        $dirs = $this->project?->context_map['roles']['reference'] ?? [];
+
+        $patterns = [];
+        foreach ($dirs as $dir) {
+            $dir = rtrim((string) $dir, '/');
+            $patterns[] = 'Edit('.$dir.'/**)';
+            $patterns[] = 'Write('.$dir.'/**)';
+        }
+
+        return $patterns;
+    }
+
+    /**
+     * Whether the resolved working directory is usable for dispatch.
+     */
+    public function hasValidWorkdir(): bool
+    {
+        $dir = is_string($this->resolvedWorkdir()) ? trim((string) $this->resolvedWorkdir()) : '';
+
+        return $dir !== '' && is_dir($dir) && is_writable($dir);
     }
 
     public function parent(): BelongsTo

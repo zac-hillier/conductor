@@ -20,6 +20,8 @@ class ReadinessPromptBuilder
             .'an autonomous worker act on this brief?',
     ];
 
+    public function __construct(private readonly ProjectContextBuilder $context = new ProjectContextBuilder) {}
+
     public function for(Task $task, string $reviewerAgent): string
     {
         $lines = [];
@@ -33,20 +35,10 @@ class ReadinessPromptBuilder
         $lines[] = 'Your lens for this assessment:';
         $lines[] = $lens;
 
-        $profile = $task->profile;
-        if ($profile !== null) {
+        $context = $this->context->block($task);
+        if ($context !== []) {
             $lines[] = '';
-            $lines[] = 'Profile context:';
-            $lines[] = '- Name: '.$profile->name;
-            $lines[] = '- Kind: '.$profile->kind->label();
-
-            if (! empty($profile->workdir)) {
-                $lines[] = '- Working directory: '.$profile->workdir;
-            }
-
-            if (! empty($profile->repo_url)) {
-                $lines[] = '- Repository: '.$profile->repo_url;
-            }
+            $lines = array_merge($lines, $context);
         }
 
         $lines[] = '';
