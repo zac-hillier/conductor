@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TaskStatus;
+use App\Jobs\ScopeTaskJob;
 use App\Jobs\ScoreTaskJob;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -137,6 +138,33 @@ class Task extends Model
         }
 
         ScoreTaskJob::dispatch($this);
+    }
+
+    /**
+     * Launch a scope run when a task enters scoping, unless one is already in
+     * flight. Idempotent: no-op for non-scoping tasks or when a scope run is
+     * already running — so a manual status change, drag, or the buttons all
+     * actually start scoping without stacking duplicate runs.
+     */
+    public function enterScoping(): void
+    {
+        if ($this->status !== TaskStatus::Scoping || $this->hasActiveScopeRun()) {
+            return;
+        }
+
+        ScopeTaskJob::dispatch($this);
+    }
+
+    /**
+     * Whether a scope run has started but not finished — the source of truth
+     * for the "Scoping…" indicator (so a stuck status can't fake progress).
+     */
+    public function hasActiveScopeRun(): bool
+    {
+        return $this->runs()
+            ->where('kind', 'scope')
+            ->whereNull('finished_at')
+            ->exists();
     }
 
     /**

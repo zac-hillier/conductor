@@ -345,13 +345,22 @@
                                 <p class="mt-2 text-xs text-zinc-400">Runs a read-only session to refine the brief or ask clarifying questions.</p>
                             </div>
                         @elseif ($selectedTask->status === \App\Enums\TaskStatus::Scoping)
-                            <div class="flex items-center gap-2 border-t border-zinc-200 pt-4 text-sm text-indigo-600 dark:border-zinc-700 dark:text-indigo-400">
-                                <span class="relative flex h-2 w-2">
-                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75"></span>
-                                    <span class="relative inline-flex h-2 w-2 rounded-full bg-indigo-500"></span>
-                                </span>
-                                Scoping…
-                            </div>
+                            @if ($selectedTask->hasActiveScopeRun())
+                                <div class="flex items-center gap-2 border-t border-zinc-200 pt-4 text-sm text-indigo-600 dark:border-zinc-700 dark:text-indigo-400">
+                                    <span class="relative flex h-2 w-2">
+                                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75"></span>
+                                        <span class="relative inline-flex h-2 w-2 rounded-full bg-indigo-500"></span>
+                                    </span>
+                                    Scoping…
+                                </div>
+                            @else
+                                <div class="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                                    <p class="text-sm text-zinc-500 dark:text-zinc-400">No scope run is active. Queue one now.</p>
+                                    <flux:button variant="primary" icon="sparkles" class="w-full" wire:click="rescope">
+                                        Scope with agent
+                                    </flux:button>
+                                </div>
+                            @endif
                         @elseif ($selectedTask->status === \App\Enums\TaskStatus::NeedsInput)
                             <div class="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
                                 <flux:subheading>Scoping conversation</flux:subheading>

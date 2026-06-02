@@ -135,6 +135,10 @@ class Board extends Component
         if ($target === TaskStatus::Ready) {
             $task->enterReady();
         }
+
+        if ($target === TaskStatus::Scoping) {
+            $task->enterScoping();
+        }
     }
 
     public function selectTask(int $taskId): void
@@ -208,6 +212,10 @@ class Board extends Component
             if ($newStatus === TaskStatus::Ready) {
                 $task->enterReady();
             }
+
+            if ($newStatus === TaskStatus::Scoping) {
+                $task->enterScoping();
+            }
         }
     }
 
@@ -259,6 +267,21 @@ class Board extends Component
         $this->beginScoping($task);
     }
 
+    public function rescope(): void
+    {
+        if ($this->selectedTaskId === null) {
+            return;
+        }
+
+        $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+
+        if ($task->status !== TaskStatus::Scoping) {
+            return;
+        }
+
+        $task->enterScoping();
+    }
+
     public function continueScoping(): void
     {
         if ($this->selectedTaskId === null) {
@@ -296,7 +319,7 @@ class Board extends Component
             'to' => TaskStatus::Scoping->value,
         ]);
 
-        ScopeTaskJob::dispatch($task);
+        $task->enterScoping();
     }
 
     public function approveTask(): void
