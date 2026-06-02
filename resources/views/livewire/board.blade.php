@@ -63,17 +63,24 @@
                                 </flux:badge>
                             </div>
                             <p class="mt-1 truncate text-sm font-medium">{{ $task->title }}</p>
-                            @if ($task->readiness_score !== null && $task->status === \App\Enums\TaskStatus::Ready)
-                                @php($light = $task->readiness_detail['light'] ?? 'red')
-                                <div class="mt-2 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                                    <span @class([
-                                        'inline-flex h-2 w-2 rounded-full',
-                                        'bg-green-500' => $light === 'green',
-                                        'bg-amber-500' => $light === 'amber',
-                                        'bg-red-500' => $light === 'red',
-                                    ])></span>
-                                    Readiness {{ $task->readiness_score }}
-                                </div>
+                            @if ($task->status === \App\Enums\TaskStatus::Ready)
+                                @if ($task->readiness_score !== null)
+                                    @php($light = $task->readiness_detail['light'] ?? 'red')
+                                    <div class="mt-2 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                                        <span @class([
+                                            'inline-flex h-2 w-2 rounded-full',
+                                            'bg-green-500' => $light === 'green',
+                                            'bg-amber-500' => $light === 'amber',
+                                            'bg-red-500' => $light === 'red',
+                                        ])></span>
+                                        Readiness {{ $task->readiness_score }}
+                                    </div>
+                                @else
+                                    <div class="mt-2 flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500" data-readiness="unscored">
+                                        <span class="inline-flex h-2 w-2 rounded-full bg-zinc-300 dark:bg-zinc-600"></span>
+                                        Unscored
+                                    </div>
+                                @endif
                             @endif
                             @if ($task->status === \App\Enums\TaskStatus::Processing)
                                 <div class="mt-2 flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
@@ -242,6 +249,10 @@
                                         @endforeach
                                     </div>
                                 @else
+                                    <div class="flex items-center gap-2">
+                                        <span class="inline-flex h-3 w-3 rounded-full bg-zinc-300 dark:bg-zinc-600"></span>
+                                        <span class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Unscored</span>
+                                    </div>
                                     <p class="text-xs text-zinc-400">Not yet scored. Score the brief before auto-dispatch.</p>
                                 @endif
 

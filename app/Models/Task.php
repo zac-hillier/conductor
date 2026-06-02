@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TaskStatus;
+use App\Jobs\ScoreTaskJob;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -100,6 +101,21 @@ class Task extends Model
         }
 
         return $claimed;
+    }
+
+    /**
+     * Trigger readiness scoring when a task lands in ready without a score.
+     *
+     * Idempotent: does nothing for non-ready tasks or ones already scored.
+     * ScoreTaskJob re-checks the status itself, so a stale dispatch is safe.
+     */
+    public function enterReady(): void
+    {
+        if ($this->status !== TaskStatus::Ready || $this->readiness_score !== null) {
+            return;
+        }
+
+        ScoreTaskJob::dispatch($this);
     }
 
     /**

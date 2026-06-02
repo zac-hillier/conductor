@@ -2,6 +2,7 @@
 
 use App\Enums\TaskStatus;
 use App\Jobs\RunTaskJob;
+use App\Jobs\ScoreTaskJob;
 use App\Livewire\Board;
 use App\Models\Profile;
 use App\Models\Task;
@@ -30,7 +31,7 @@ it('auto-dispatches a ready task scored at or above the threshold', function () 
     Bus::assertDispatched(RunTaskJob::class, fn (RunTaskJob $job) => $job->task->is($task));
 });
 
-it('holds an unscored ready task from auto-dispatch', function () {
+it('self-heals an unscored ready task by enqueueing scoring instead of dispatching it', function () {
     Bus::fake();
 
     $profile = Profile::factory()->personal()->create(['concurrency_cap' => 2]);
@@ -43,10 +44,11 @@ it('holds an unscored ready task from auto-dispatch', function () {
     app(DispatchScheduler::class)->tick();
 
     expect($task->fresh()->status)->toBe(TaskStatus::Ready);
-    Bus::assertNothingDispatched();
+    Bus::assertNotDispatched(RunTaskJob::class);
+    Bus::assertDispatched(ScoreTaskJob::class, fn (ScoreTaskJob $job) => $job->task->is($task));
 });
 
-it('holds a below-threshold ready task from auto-dispatch', function () {
+it('holds a below-threshold ready task and records held_low_score once', function () {
     Bus::fake();
 
     $profile = Profile::factory()->personal()->create(['concurrency_cap' => 2]);
@@ -57,9 +59,12 @@ it('holds a below-threshold ready task from auto-dispatch', function () {
     ]);
 
     app(DispatchScheduler::class)->tick();
+    app(DispatchScheduler::class)->tick();
 
     expect($task->fresh()->status)->toBe(TaskStatus::Ready);
-    Bus::assertNothingDispatched();
+    Bus::assertNotDispatched(RunTaskJob::class);
+    Bus::assertNotDispatched(ScoreTaskJob::class);
+    expect($task->events()->where('kind', 'held_low_score')->count())->toBe(1);
 });
 
 it('still lets a human manually dispatch a red, unscored task', function () {

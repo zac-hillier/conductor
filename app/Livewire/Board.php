@@ -95,6 +95,10 @@ class Board extends Component
             'from' => $from->value,
             'to' => $target->value,
         ]);
+
+        if ($target === TaskStatus::Ready) {
+            $task->enterReady();
+        }
     }
 
     public function selectTask(int $taskId): void
@@ -164,6 +168,10 @@ class Board extends Component
                 'from' => $oldStatus->value,
                 'to' => $newStatus->value,
             ]);
+
+            if ($newStatus === TaskStatus::Ready) {
+                $task->enterReady();
+            }
         }
     }
 
@@ -313,6 +321,8 @@ class Board extends Component
             'to' => TaskStatus::Ready->value,
         ]);
         $task->recordEvent('retry_requested');
+
+        $task->enterReady();
     }
 
     private function selectedReviewTask(): ?Task

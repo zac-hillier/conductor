@@ -175,6 +175,10 @@ class TasksYamlImporter
             $existing->update($attributes);
             $this->carryQuestions($existing, $status, $entry);
 
+            if ($status === TaskStatus::Ready) {
+                $existing->enterReady();
+            }
+
             return 'updated';
         }
 
@@ -184,6 +188,10 @@ class TasksYamlImporter
         ]));
 
         $this->carryQuestions($task, $status, $entry);
+
+        if ($status === TaskStatus::Ready) {
+            $task->enterReady();
+        }
 
         return 'created';
     }
