@@ -45,6 +45,11 @@ class Project extends Model
         return $this->hasMany(Task::class);
     }
 
+    public function plans(): HasMany
+    {
+        return $this->hasMany(Plan::class);
+    }
+
     /**
      * Whether this project has a usable working directory: a non-empty path
      * that exists on disk and is writable. Mirrors Profile::hasValidWorkdir so

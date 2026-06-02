@@ -7,6 +7,8 @@ use App\Models\Task;
 use App\Services\Claude\ClaudeRunner;
 use App\Services\Claude\ProcessClaudeRunner;
 use App\Services\Notifier;
+use App\Services\PhasePromptBuilder;
+use App\Services\PlanCoordinator;
 use App\Services\TaskPromptBuilder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -98,7 +100,6 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
         $task->recordEvent('dispatched', ['attempt' => $run->attempt]);
 
         try {
-            $prompt = $promptBuilder->build($task);
             $workdir = (string) $task->resolvedWorkdir();
             $policy = $task->profile->policyOrDefault();
 
@@ -107,10 +108,22 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
                 $task->grantedCapabilities(),
             ));
 
-            $result = $runner->run($prompt, $workdir, [
+            $options = [
                 'permission_mode' => $policy->permissionMode(),
                 'disallowed_tools' => $disallowed,
-            ]);
+            ];
+
+            // A phase-backed task is executed by ag-exec against its phase plan,
+            // with the longer pipeline timeout; otherwise it's an ordinary task.
+            if ($task->phase_id !== null) {
+                $prompt = app(PhasePromptBuilder::class)->build($task);
+                $options['agent'] = (string) config('conductor.pipeline.exec.agent');
+                $options['timeout'] = (int) config('conductor.pipeline.exec.timeout');
+            } else {
+                $prompt = $promptBuilder->build($task);
+            }
+
+            $result = $runner->run($prompt, $workdir, $options);
 
             $logRef = $this->writeLog($run->id, $result->rawJson);
 
@@ -218,6 +231,10 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
             ]);
 
             Notifier::taskAttention($task->fresh(), 'run_failed');
+        } finally {
+            // Keep the plan/phase in step with the backing task's outcome and
+            // drive sequencing (no-op for ordinary tasks).
+            app(PlanCoordinator::class)->onTaskSettled($task->fresh());
         }
     }
 

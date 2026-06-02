@@ -8,6 +8,9 @@
             <flux:button href="{{ route('profiles.projects', $profile) }}" variant="ghost" size="sm" icon="folder" wire:navigate>
                 Projects
             </flux:button>
+            <flux:button href="{{ route('profiles.plans', $profile) }}" variant="ghost" size="sm" icon="map" wire:navigate>
+                Plans
+            </flux:button>
             <flux:button href="{{ route('profiles.inbox', $profile) }}" variant="ghost" size="sm" icon="inbox" wire:navigate>
                 Inbox
             </flux:button>
@@ -68,6 +71,9 @@
                             <p class="mt-1 truncate text-sm font-medium">{{ $task->title }}</p>
                             @if ($projects->count() > 1 && $task->project)
                                 <p class="mt-0.5 truncate text-xs text-zinc-400">{{ $task->project->name }}</p>
+                            @endif
+                            @if ($task->phase)
+                                <flux:badge size="sm" color="indigo" class="mt-1">{{ $task->phase->plan->name }} · P{{ $task->phase->number }}</flux:badge>
                             @endif
                             @if ($task->status === \App\Enums\TaskStatus::Ready)
                                 @if ($task->readiness_score !== null)
@@ -243,6 +249,22 @@
                                 </div>
                             </div>
                         </form>
+
+                        @if (! $selectedTask->phase && in_array($selectedTask->status, [\App\Enums\TaskStatus::Backlog, \App\Enums\TaskStatus::Research, \App\Enums\TaskStatus::Scoping, \App\Enums\TaskStatus::NeedsInput, \App\Enums\TaskStatus::Ready], true))
+                            <div class="flex items-center justify-between gap-3 rounded-md border border-dashed border-zinc-200 p-3 dark:border-zinc-700">
+                                <p class="text-xs text-zinc-500 dark:text-zinc-400">Big enough to need phases? Decompose it into a coordinated multi-phase plan.</p>
+                                <flux:button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    icon="map"
+                                    wire:click="promoteToPlan"
+                                    wire:confirm="Promote this task into a multi-phase plan and generate its phases?"
+                                >
+                                    Promote to plan
+                                </flux:button>
+                            </div>
+                        @endif
 
                         @if ($selectedTask->status === \App\Enums\TaskStatus::Ready)
                             <div class="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">

@@ -3,11 +3,14 @@
 namespace App\Livewire;
 
 use App\Enums\TaskStatus;
+use App\Jobs\GeneratePlanJob;
 use App\Jobs\RunTaskJob;
 use App\Jobs\ScoreTaskJob;
+use App\Models\Plan;
 use App\Models\Profile;
 use App\Models\Task;
 use App\Models\TaskComment;
+use App\Services\PlanCoordinator;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -389,6 +392,9 @@ class Board extends Component
         ]);
         $task->recordEvent('approved');
 
+        // Advance the plan if this task backs a phase.
+        app(PlanCoordinator::class)->onTaskSettled($task->fresh());
+
         $this->syncEditFields($task->fresh());
         $this->actionNotice = 'Approved — task marked complete.';
     }
@@ -502,6 +508,40 @@ class Board extends Component
         return $docs;
     }
 
+    /**
+     * Promote the selected task into a multi-phase plan: a plan is created in
+     * the task's project (seeded from its brief) and the planning pipeline runs.
+     * The board is where a build is born and decomposed.
+     */
+    public function promoteToPlan()
+    {
+        if ($this->selectedTaskId === null) {
+            return;
+        }
+
+        $task = $this->profile->tasks()->with('project')->findOrFail($this->selectedTaskId);
+        $project = $task->project ?? $this->profile->defaultProject();
+
+        if ($project === null) {
+            $this->actionNotice = 'This profile has no project to attach a plan to.';
+
+            return;
+        }
+
+        $concept = trim($task->title."\n\n".($task->summary ?? ''));
+
+        $plan = $project->plans()->create([
+            'source_task_id' => $task->id,
+            'name' => $task->title,
+            'slug' => Plan::uniqueSlugFor($project, $task->title),
+            'concept' => $concept,
+        ]);
+
+        GeneratePlanJob::dispatch($plan);
+
+        return $this->redirect(route('profiles.plans.show', [$this->profile, $plan]), navigate: true);
+    }
+
     public function deleteTask(): void
     {
         if ($this->selectedTaskId === null) {
@@ -516,16 +556,13 @@ class Board extends Component
 
     private function nextRef(): string
     {
-        $prefix = strtoupper(substr($this->profile->slug, 0, 4));
-        $seq = $this->profile->tasks()->count() + 1;
-
-        return sprintf('%s-%03d', $prefix, $seq);
+        return $this->profile->nextTaskRef();
     }
 
     public function render()
     {
         $tasks = $this->profile->tasks()
-            ->with('project')
+            ->with(['project', 'phase.plan'])
             ->orderByDesc('priority')
             ->orderBy('created_at')
             ->get()

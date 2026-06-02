@@ -1,0 +1,22 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('phases', function (Blueprint $table) {
+            $table->string('review_verdict')->nullable()->after('outcome');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('phases', function (Blueprint $table) {
+            $table->dropColumn('review_verdict');
+        });
+    }
+};

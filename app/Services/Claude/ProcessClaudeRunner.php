@@ -12,7 +12,7 @@ class ProcessClaudeRunner implements ClaudeRunner
         $command = $this->buildCommand($prompt, $options);
 
         $process = new Process($command, $workdir);
-        $process->setTimeout((float) config('conductor.claude.timeout'));
+        $process->setTimeout((float) ($options['timeout'] ?? config('conductor.claude.timeout')));
 
         try {
             $process->run();

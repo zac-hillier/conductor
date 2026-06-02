@@ -19,6 +19,7 @@ class Task extends Model
     protected $fillable = [
         'profile_id',
         'project_id',
+        'phase_id',
         'ref',
         'title',
         'summary',
@@ -55,6 +56,11 @@ class Task extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function phase(): BelongsTo
+    {
+        return $this->belongsTo(Phase::class);
     }
 
     /**

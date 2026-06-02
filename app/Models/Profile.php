@@ -62,6 +62,17 @@ class Profile extends Model
     }
 
     /**
+     * The next sequential task ref for this profile (e.g. SHOR-007).
+     */
+    public function nextTaskRef(): string
+    {
+        $prefix = strtoupper(substr($this->slug, 0, 4));
+        $seq = $this->tasks()->count() + 1;
+
+        return sprintf('%s-%03d', $prefix, $seq);
+    }
+
+    /**
      * Whether this profile has a usable project home: a non-empty path that
      * exists on disk and is writable. Workers must never run without one — an
      * empty workdir would otherwise fall back to Conductor's own directory and
