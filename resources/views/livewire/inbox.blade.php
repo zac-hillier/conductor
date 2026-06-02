@@ -1,4 +1,4 @@
-<div class="mx-auto max-w-7xl">
+<div class="mx-auto max-w-7xl" wire:poll.5s>
     <div class="flex items-center justify-between gap-3">
         <flux:button href="{{ route('overview') }}" variant="ghost" size="sm" icon="arrow-left" wire:navigate>
             Overview

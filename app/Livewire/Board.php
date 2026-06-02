@@ -52,6 +52,19 @@ class Board extends Component
         $this->profile = $profile;
     }
 
+    /**
+     * Poll faster while work is in flight, slower when idle. Used by the board's
+     * wire:poll so running/scoping tasks update live without a manual refresh.
+     */
+    public function pollInterval(): string
+    {
+        $inFlight = $this->profile->tasks()
+            ->whereIn('status', [TaskStatus::Processing->value, TaskStatus::Scoping->value])
+            ->exists();
+
+        return $inFlight ? '3s' : '10s';
+    }
+
     public function createTask(): void
     {
         $validated = $this->validate([

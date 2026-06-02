@@ -1,4 +1,4 @@
-<div class="mx-auto max-w-7xl">
+<div class="mx-auto max-w-7xl" wire:poll.10s>
     <div class="flex items-center justify-between">
         <div>
             <flux:heading size="xl">Conductor</flux:heading>
