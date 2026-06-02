@@ -6,15 +6,31 @@ matching the local `127.0.0.1` user-service convention.
 ## Install
 
 ```
-cp deploy/systemd/conductor-queue@.service deploy/systemd/conductor-scheduler.service ~/.config/systemd/user/
+cp deploy/systemd/conductor-horizon.service deploy/systemd/conductor-scheduler.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable --now conductor-queue@1 conductor-queue@2 conductor-queue@3 conductor-scheduler
+systemctl --user enable --now conductor-horizon conductor-scheduler
 ```
 
-- **conductor-queue@N** — queue workers that execute dispatched jobs. Three instances
-  approximate the per-profile cap-3 concurrency; add/remove instances to scale the pool.
+- **conductor-horizon** — runs `php artisan horizon`, the queue supervisor that
+  executes dispatched jobs (`RunTaskJob`/`ScopeTaskJob`/`ScoreTaskJob`) off the
+  dedicated Redis. The supervisor caps concurrency at 3 processes (see
+  `config/horizon.php`), approximating the per-profile cap-3 concurrency; adjust
+  `maxProcesses` there to scale the pool — no need to add units.
 - **conductor-scheduler** — runs `schedule:work`: the every-minute auto-dispatch tick
   (`conductor:dispatch-tick`) and the 5-minute stuck-task recovery (`conductor:recover`).
+
+### Migrating from the plain queue workers
+
+Horizon **replaces** the previous `conductor-queue@1..3` workers. On a host that
+still has them installed:
+
+```
+systemctl --user disable --now conductor-queue@1 conductor-queue@2 conductor-queue@3
+```
+
+then install and enable `conductor-horizon` as above. `conductor-scheduler` is
+unchanged. The dedicated Redis (`conductor-redis`, port 6381) must be running —
+bring up the compose stack first (`docker compose up -d`).
 
 ## Notes
 

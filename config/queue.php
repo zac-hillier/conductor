@@ -68,7 +68,11 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            // Must exceed the longest job timeout: RunTaskJob drives a claude
+            // session that can run ~900s and Horizon's worker timeout is 1260s.
+            // retry_after sits above both so a slow run is never released back
+            // onto the queue and executed a second time.
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 1320),
             'block_for' => null,
             'after_commit' => false,
         ],

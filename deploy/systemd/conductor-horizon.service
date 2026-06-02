@@ -1,0 +1,14 @@
+[Unit]
+Description=Conductor Horizon (queue supervisor — runs dispatched jobs)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/zac/conductor
+Environment=PATH=/home/zac/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/php /home/zac/conductor/artisan horizon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
