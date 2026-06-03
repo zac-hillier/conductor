@@ -32,6 +32,22 @@ then install and enable `conductor-horizon` as above. `conductor-scheduler` is
 unchanged. The dedicated Redis (`conductor-redis`, port 6381) must be running —
 bring up the compose stack first (`docker compose up -d`).
 
+## Database backups
+
+`conductor-backup.timer` runs `deploy/backup/conductor-db-backup.sh` hourly — a
+gzipped `pg_dump` of the Conductor database to `/home/zac/backups/conductor/`
+(14-day retention). Install:
+
+```
+cp conductor-backup.service conductor-backup.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now conductor-backup.timer
+```
+
+Take an ad-hoc backup before any risky operation:
+`deploy/backup/conductor-db-backup.sh pre-op`. Restore:
+`gunzip -c <file>.sql.gz | docker exec -i conductor-postgres psql -U conductor -d conductor`.
+
 ## Notes
 
 - The unit `Environment=PATH` must include the directory holding the `claude` binary

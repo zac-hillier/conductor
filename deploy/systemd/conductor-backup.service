@@ -1,0 +1,9 @@
+[Unit]
+Description=Conductor database backup (gzipped pg_dump)
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/zac/conductor
+Environment=PATH=/home/zac/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/zac/conductor/deploy/backup/conductor-db-backup.sh auto
