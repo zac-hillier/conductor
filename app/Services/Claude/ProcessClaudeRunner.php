@@ -11,7 +11,14 @@ class ProcessClaudeRunner implements ClaudeRunner
     {
         $command = $this->buildCommand($prompt, $options);
 
-        $process = new Process($command, $workdir);
+        // CRITICAL: strip Conductor's own configuration from the worker's
+        // environment. Laravel putenv's Conductor's .env (DB_*, REDIS_*, …) into
+        // the real process env, which a child would otherwise inherit — so a
+        // worker running `php artisan` in a TARGET project would read Conductor's
+        // DB credentials and operate on Conductor's own database instead of the
+        // project's. Setting each key to false removes it from the child env
+        // (PATH/HOME/etc. are still inherited), so the target uses its own .env.
+        $process = new Process($command, $workdir, $this->strippedEnv());
         $process->setTimeout((float) ($options['timeout'] ?? config('conductor.claude.timeout')));
 
         try {
@@ -37,6 +44,41 @@ class ProcessClaudeRunner implements ClaudeRunner
         }
 
         return $this->parse($output);
+    }
+
+    /**
+     * Conductor's own .env keys mapped to false, so Symfony Process removes them
+     * from the spawned worker's inherited environment. The worker (and anything
+     * it runs, e.g. `php artisan` in the target project) then falls back to that
+     * project's own configuration rather than Conductor's.
+     *
+     * @return array<string, false>
+     */
+    public function strippedEnv(): array
+    {
+        $keys = [];
+
+        $path = base_path('.env');
+        if (is_file($path) && is_readable($path)) {
+            foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                $line = ltrim($line);
+                if ($line === '' || str_starts_with($line, '#')) {
+                    continue;
+                }
+                if (preg_match('/^([A-Z0-9_]+)\s*=/', $line, $m) === 1) {
+                    $keys[] = $m[1];
+                }
+            }
+        }
+
+        // Always strip the dangerous families even if .env can't be read.
+        $keys = array_merge($keys, [
+            'DB_CONNECTION', 'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'DB_USERNAME',
+            'DB_PASSWORD', 'DB_URL', 'DATABASE_URL', 'REDIS_HOST', 'REDIS_PORT',
+            'REDIS_PASSWORD', 'REDIS_URL', 'APP_KEY', 'APP_ENV',
+        ]);
+
+        return array_fill_keys(array_unique($keys), false);
     }
 
     /**
