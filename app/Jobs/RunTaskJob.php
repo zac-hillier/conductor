@@ -92,6 +92,20 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        // Defensive: never execute a task whose prerequisites are unmet.
+        if ($task->isBlockedByDependencies()) {
+            $task->update(['status' => TaskStatus::Blocked]);
+            $task->recordEvent('status_changed', [
+                'from' => TaskStatus::Processing->value,
+                'to' => TaskStatus::Blocked->value,
+            ]);
+            $task->recordEvent('dependencies_unmet');
+
+            Notifier::taskAttention($task->fresh(), 'blocked');
+
+            return;
+        }
+
         $run = $task->runs()->create([
             'attempt' => $task->nextAttempt(),
             'started_at' => now(),
@@ -113,9 +127,10 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
                 'disallowed_tools' => $disallowed,
             ];
 
-            // A phase-backed task is executed by ag-exec against its phase plan,
-            // with the longer pipeline timeout; otherwise it's an ordinary task.
-            if ($task->phase_id !== null) {
+            // A phase's *execution* task is run by ag-exec against its phase plan
+            // with the longer pipeline timeout; a task merely tagged relevant to
+            // a phase runs as an ordinary task.
+            if ($task->isPhaseExecutionTask()) {
                 $prompt = app(PhasePromptBuilder::class)->build($task);
                 $options['agent'] = (string) config('conductor.pipeline.exec.agent');
                 $options['timeout'] = (int) config('conductor.pipeline.exec.timeout');
@@ -213,6 +228,10 @@ class RunTaskJob implements ShouldBeUnique, ShouldQueue
                 $task->fresh(),
                 $destination === TaskStatus::Review ? 'review' : 'complete',
             );
+
+            if ($destination === TaskStatus::Complete) {
+                $task->fresh()->notifyUnblockedDependents();
+            }
         } catch (Throwable $e) {
             $run->update([
                 'finished_at' => now(),

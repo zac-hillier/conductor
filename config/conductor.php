@@ -11,7 +11,7 @@ return [
 
     'notifications' => [
         'enabled' => (bool) env('CONDUCTOR_NOTIFICATIONS_ENABLED', true),
-        'events' => ['needs_input', 'blocked', 'review', 'complete', 'run_failed'],
+        'events' => ['needs_input', 'blocked', 'review', 'complete', 'run_failed', 'unblocked'],
     ],
 
     'recovery' => [

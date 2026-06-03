@@ -59,6 +59,11 @@ class DispatchScheduler
                     continue;
                 }
 
+                // Don't auto-dispatch a task whose prerequisites are unmet.
+                if ($task->isBlockedByDependencies()) {
+                    continue;
+                }
+
                 if ($dryRun) {
                     $dispatched[] = $task->ref;
 

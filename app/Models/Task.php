@@ -5,11 +5,14 @@ namespace App\Models;
 use App\Enums\TaskStatus;
 use App\Jobs\ScopeTaskJob;
 use App\Jobs\ScoreTaskJob;
+use App\Services\Notifier;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class Task extends Model
 {
@@ -61,6 +64,16 @@ class Task extends Model
     public function phase(): BelongsTo
     {
         return $this->belongsTo(Phase::class);
+    }
+
+    /**
+     * Whether this task is the designated execution task of its phase (as
+     * opposed to merely being tagged relevant to a phase). Only execution tasks
+     * run as ag-exec and are pinned to their plan's project.
+     */
+    public function isPhaseExecutionTask(): bool
+    {
+        return $this->phase !== null && $this->phase->task_id === $this->id;
     }
 
     /**
@@ -139,6 +152,95 @@ class Task extends Model
     public function approvals(): HasMany
     {
         return $this->hasMany(Approval::class);
+    }
+
+    /**
+     * Tasks this task waits on — all must be Complete/Archived before it can be
+     * scoped, readied, or dispatched.
+     */
+    public function dependencies(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'task_dependencies', 'task_id', 'depends_on_task_id');
+    }
+
+    /**
+     * Tasks waiting on this one.
+     */
+    public function dependents(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'task_dependencies', 'depends_on_task_id', 'task_id');
+    }
+
+    /**
+     * Prerequisites not yet satisfied (status outside Complete/Archived).
+     *
+     * @return Collection<int, Task>
+     */
+    public function unmetDependencies(): Collection
+    {
+        return $this->dependencies()
+            ->whereNotIn('status', [TaskStatus::Complete->value, TaskStatus::Archived->value])
+            ->get();
+    }
+
+    public function isBlockedByDependencies(): bool
+    {
+        return $this->dependencies()
+            ->whereNotIn('status', [TaskStatus::Complete->value, TaskStatus::Archived->value])
+            ->exists();
+    }
+
+    /**
+     * After this task completes, flag + notify any dependents that have now had
+     * all their prerequisites satisfied (and weren't already flagged).
+     */
+    public function notifyUnblockedDependents(): void
+    {
+        foreach ($this->dependents()->get() as $dependent) {
+            if ($dependent->isBlockedByDependencies()) {
+                continue;
+            }
+
+            if ($dependent->events()->where('kind', 'dependencies_met')->exists()) {
+                continue;
+            }
+
+            $dependent->recordEvent('dependencies_met');
+            Notifier::taskAttention($dependent, 'unblocked');
+        }
+    }
+
+    /**
+     * Whether adding $prerequisite as a dependency of this task would create a
+     * cycle (the prerequisite already depends, transitively, on this task).
+     */
+    public function wouldCycleWith(Task $prerequisite): bool
+    {
+        if ($prerequisite->id === $this->id) {
+            return true;
+        }
+
+        $visited = [];
+        $stack = [$prerequisite->id];
+
+        while ($stack !== []) {
+            $current = array_pop($stack);
+
+            if (isset($visited[$current])) {
+                continue;
+            }
+            $visited[$current] = true;
+
+            if ($current === $this->id) {
+                return true;
+            }
+
+            foreach (static::query()->whereKey($current)->first()?->dependencies()->pluck('tasks.id')->all() ?? [] as $next) {
+                $stack[] = $next;
+            }
+        }
+
+        return false;
     }
 
     /**

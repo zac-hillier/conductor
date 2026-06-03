@@ -75,6 +75,11 @@
                             @if ($task->phase)
                                 <flux:badge size="sm" color="indigo" class="mt-1">{{ $task->phase->plan->name }} · P{{ $task->phase->number }}</flux:badge>
                             @endif
+                            @if (($task->unmet_dependencies_count ?? 0) > 0)
+                                <div class="mt-1">
+                                    <flux:badge size="sm" color="amber">blocked by {{ $task->unmet_dependencies_count }}</flux:badge>
+                                </div>
+                            @endif
                             @if ($task->status === \App\Enums\TaskStatus::Ready)
                                 @if ($task->readiness_score !== null)
                                     @php($light = $task->readiness_detail['light'] ?? 'red')
@@ -229,6 +234,30 @@
                             </div>
 
                             <flux:text size="sm" class="text-zinc-400">{{ $selectedTask->status->description() }}</flux:text>
+
+                            @php($isExecTask = $selectedTask->isPhaseExecutionTask())
+
+                            @if ($projects->count() > 1)
+                                <flux:select wire:model="editProjectId" label="Project" :disabled="$isExecTask">
+                                    @foreach ($projects as $project)
+                                        <flux:select.option value="{{ $project->id }}">{{ $project->name }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                                @if ($isExecTask)
+                                    <flux:text size="sm" class="text-zinc-400">This task executes a plan phase, so it stays in its plan's project.</flux:text>
+                                @endif
+                            @endif
+
+                            @if ($isExecTask)
+                                <flux:text size="sm" class="text-zinc-400">Executes {{ $selectedTask->phase->plan->name }} · Phase {{ $selectedTask->phase->number }}.</flux:text>
+                            @elseif ($phaseOptions->isNotEmpty())
+                                <flux:select wire:model="editPhaseId" label="Relevant to phase (optional)">
+                                    <flux:select.option value="">— none —</flux:select.option>
+                                    @foreach ($phaseOptions as $phaseOption)
+                                        <flux:select.option value="{{ $phaseOption->id }}">{{ $phaseOption->plan->name }} · P{{ $phaseOption->number }} {{ $phaseOption->name }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                            @endif
 
                             <div class="flex items-center justify-between gap-2 pt-2">
                                 <flux:button
@@ -555,6 +584,35 @@
                                 @endforeach
                             </div>
                         @endif
+
+                        <div class="space-y-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                            <flux:subheading>Depends on</flux:subheading>
+                            <p class="text-xs text-zinc-400">Prerequisites must be complete before this task can be scoped, readied, or dispatched.</p>
+                            @if ($selectedTask->dependencies->isNotEmpty())
+                                @foreach ($selectedTask->dependencies as $dep)
+                                    <div wire:key="dep-{{ $dep->id }}" class="flex items-center justify-between gap-2 text-sm">
+                                        <span class="flex min-w-0 items-center gap-2">
+                                            <flux:badge size="sm" color="{{ $dep->status->color() }}">{{ $dep->status->label() }}</flux:badge>
+                                            <span class="truncate"><span class="font-mono text-xs text-zinc-400">{{ $dep->ref }}</span> {{ $dep->title }}</span>
+                                        </span>
+                                        <flux:button variant="ghost" size="xs" icon="x-mark" wire:click="removeDependency({{ $dep->id }})">Remove</flux:button>
+                                    </div>
+                                @endforeach
+                            @else
+                                <p class="text-xs text-zinc-400">No prerequisites.</p>
+                            @endif
+                            @if ($dependencyOptions->isNotEmpty())
+                                <div class="flex items-end gap-2 pt-1">
+                                    <flux:select wire:model="dependencyToAdd" label="Add prerequisite" class="flex-1">
+                                        <flux:select.option value="">Select a task…</flux:select.option>
+                                        @foreach ($dependencyOptions as $opt)
+                                            <flux:select.option value="{{ $opt->id }}">{{ $opt->ref }} — {{ Str::limit($opt->title, 40) }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
+                                    <flux:button variant="ghost" size="sm" icon="plus" wire:click="addDependency">Add</flux:button>
+                                </div>
+                            @endif
+                        </div>
 
                         <div class="border-t border-zinc-200 pt-4 dark:border-zinc-700">
                             <flux:subheading>History</flux:subheading>

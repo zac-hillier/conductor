@@ -7,6 +7,7 @@ use App\Enums\PlanStatus;
 use App\Jobs\GeneratePlanJob;
 use App\Models\Plan;
 use App\Models\Profile;
+use App\Models\Task;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -111,9 +112,19 @@ class PlanDetail extends Component
 
         $phases = $this->plan->phases;
 
+        // Tasks tagged relevant to each phase, excluding the phase's own
+        // execution task (keyed by phase id for the view).
+        $relatedTasks = Task::query()
+            ->whereIn('phase_id', $phases->pluck('id'))
+            ->with('project')
+            ->get()
+            ->reject(fn ($task) => $phases->firstWhere('task_id', $task->id) !== null)
+            ->groupBy('phase_id');
+
         return view('livewire.plan-detail', [
             'plan' => $this->plan,
             'phases' => $phases,
+            'relatedTasks' => $relatedTasks,
             'doneCount' => $phases->where('status', PhaseStatus::Done)->count(),
             'pulse' => $this->plan->project->pulse(),
         ]);

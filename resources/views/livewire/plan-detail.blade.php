@@ -70,6 +70,19 @@
                         @if ($phase->task)
                             <p class="mt-1 text-xs text-zinc-400">task {{ $phase->task->ref }} — {{ $phase->task->status->label() }}</p>
                         @endif
+                        @php($related = $relatedTasks[$phase->id] ?? collect())
+                        @if ($related->isNotEmpty())
+                            <div class="mt-2">
+                                <p class="text-xs font-medium text-zinc-400">Related tasks</p>
+                                <ul class="mt-1 space-y-0.5">
+                                    @foreach ($related as $rel)
+                                        <li wire:key="rel-{{ $rel->id }}" class="text-xs text-zinc-500 dark:text-zinc-400">
+                                            <span class="font-mono">{{ $rel->ref }}</span> {{ \Illuminate\Support\Str::limit($rel->title, 60) }} — {{ $rel->status->label() }}
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
                     </div>
                     <div class="flex shrink-0 items-center gap-2">
                         @if ($phase->status === \App\Enums\PhaseStatus::Blocked)

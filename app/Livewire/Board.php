@@ -6,6 +6,7 @@ use App\Enums\TaskStatus;
 use App\Jobs\GeneratePlanJob;
 use App\Jobs\RunTaskJob;
 use App\Jobs\ScoreTaskJob;
+use App\Models\Phase;
 use App\Models\Plan;
 use App\Models\Profile;
 use App\Models\Task;
@@ -47,6 +48,14 @@ class Board extends Component
     public int $editPriority = 50;
 
     public string $editStatus = TaskStatus::Backlog->value;
+
+    public ?int $editProjectId = null;
+
+    // "Relevant to phase" link (tasks.phase_id); null = none.
+    public ?int $editPhaseId = null;
+
+    // Prerequisite picker selection (Depends-on UI).
+    public ?int $dependencyToAdd = null;
 
     public string $reviewNote = '';
 
@@ -138,6 +147,12 @@ class Board extends Component
             return;
         }
 
+        // Unmet prerequisites park the task — deny a drag into an active column.
+        if (in_array($target, [TaskStatus::Scoping, TaskStatus::Ready, TaskStatus::Processing], true)
+            && $task->isBlockedByDependencies()) {
+            return;
+        }
+
         $task->update(['status' => $target]);
 
         $task->recordEvent('status_changed', [
@@ -175,6 +190,26 @@ class Board extends Component
         $this->editSummary = $task->summary ?? '';
         $this->editPriority = $task->priority;
         $this->editStatus = $task->status->value;
+        $this->editProjectId = $task->project_id;
+        $this->editPhaseId = $task->phase_id;
+    }
+
+    /**
+     * Validate the chosen "relevant to phase" id belongs to a plan in this
+     * profile; otherwise treat it as cleared.
+     */
+    private function resolveRelevantPhaseId(): ?int
+    {
+        if ($this->editPhaseId === null) {
+            return null;
+        }
+
+        $valid = Phase::query()
+            ->whereKey($this->editPhaseId)
+            ->whereHas('plan.project', fn ($q) => $q->where('profile_id', $this->profile->id))
+            ->exists();
+
+        return $valid ? $this->editPhaseId : null;
     }
 
     public function updatedShowDetail(bool $value): void
@@ -207,7 +242,35 @@ class Board extends Component
 
         $newStatus = TaskStatus::from($validated['editStatus']);
         $oldStatus = $task->status;
+
+        // Unmet prerequisites block a move into scoping/ready/processing.
+        if ($newStatus !== $oldStatus
+            && in_array($newStatus, [TaskStatus::Scoping, TaskStatus::Ready, TaskStatus::Processing], true)
+            && $task->isBlockedByDependencies()) {
+            $this->syncEditFields($task);
+            $this->actionNotice = 'Blocked: complete this task\'s prerequisites before moving it there.';
+
+            return;
+        }
+
         $oldPriority = $task->priority;
+        $oldProjectId = $task->project_id;
+
+        // Project reassignment (Part A): refused for a phase execution task,
+        // which is pinned to its plan's project.
+        $projectId = $task->project_id;
+        if ($this->editProjectId !== $task->project_id) {
+            if ($task->isPhaseExecutionTask()) {
+                $this->actionNotice = "This task executes a plan phase, so it stays in its plan's project.";
+            } elseif ($this->editProjectId !== null && $this->profile->projects()->whereKey($this->editProjectId)->exists()) {
+                $projectId = $this->editProjectId;
+            }
+        }
+
+        // Phase relevance (Part B): a visual tag; not editable for execution tasks.
+        $phaseId = $task->isPhaseExecutionTask()
+            ? $task->phase_id
+            : $this->resolveRelevantPhaseId();
 
         $changedFields = [];
 
@@ -224,7 +287,13 @@ class Board extends Component
             'summary' => $validated['editSummary'] ?: null,
             'priority' => $validated['editPriority'],
             'status' => $newStatus,
+            'project_id' => $projectId,
+            'phase_id' => $phaseId,
         ]);
+
+        if ($projectId !== $oldProjectId) {
+            $task->recordEvent('project_changed', ['from' => $oldProjectId, 'to' => $projectId]);
+        }
 
         if ($changedFields !== []) {
             $task->recordEvent('updated', ['fields' => $changedFields]);
@@ -271,6 +340,12 @@ class Board extends Component
             return;
         }
 
+        if ($task->isBlockedByDependencies()) {
+            $this->actionNotice = 'Blocked: complete this task\'s prerequisites first.';
+
+            return;
+        }
+
         if ($task->claim()) {
             RunTaskJob::dispatch($task);
 
@@ -307,6 +382,12 @@ class Board extends Component
         $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
 
         if (! in_array($task->status, [TaskStatus::Backlog, TaskStatus::Research], true)) {
+            return;
+        }
+
+        if ($task->isBlockedByDependencies()) {
+            $this->actionNotice = 'Blocked: complete this task\'s prerequisites first.';
+
             return;
         }
 
@@ -392,8 +473,10 @@ class Board extends Component
         ]);
         $task->recordEvent('approved');
 
-        // Advance the plan if this task backs a phase.
+        // Advance the plan if this task backs a phase; notify any dependents
+        // this completion unblocks.
         app(PlanCoordinator::class)->onTaskSettled($task->fresh());
+        $task->fresh()->notifyUnblockedDependents();
 
         $this->syncEditFields($task->fresh());
         $this->actionNotice = 'Approved — task marked complete.';
@@ -509,6 +592,43 @@ class Board extends Component
     }
 
     /**
+     * Add a prerequisite to the selected task (profile-scoped, no cycles).
+     */
+    public function addDependency(): void
+    {
+        if ($this->selectedTaskId === null || $this->dependencyToAdd === null) {
+            return;
+        }
+
+        $task = $this->profile->tasks()->findOrFail($this->selectedTaskId);
+        $prerequisite = $this->profile->tasks()->find($this->dependencyToAdd);
+
+        if ($prerequisite === null) {
+            return;
+        }
+
+        if ($task->wouldCycleWith($prerequisite)) {
+            $this->actionNotice = 'That would create a circular dependency.';
+            $this->dependencyToAdd = null;
+
+            return;
+        }
+
+        $task->dependencies()->syncWithoutDetaching([$prerequisite->id]);
+        $this->dependencyToAdd = null;
+    }
+
+    public function removeDependency(int $prerequisiteId): void
+    {
+        if ($this->selectedTaskId === null) {
+            return;
+        }
+
+        $this->profile->tasks()->findOrFail($this->selectedTaskId)
+            ->dependencies()->detach($prerequisiteId);
+    }
+
+    /**
      * Promote the selected task into a multi-phase plan: a plan is created in
      * the task's project (seeded from its brief) and the planning pipeline runs.
      * The board is where a build is born and decomposed.
@@ -563,18 +683,36 @@ class Board extends Component
     {
         $tasks = $this->profile->tasks()
             ->with(['project', 'phase.plan'])
+            ->withCount(['dependencies as unmet_dependencies_count' => function ($query) {
+                $query->whereNotIn('status', [TaskStatus::Complete->value, TaskStatus::Archived->value]);
+            }])
             ->orderByDesc('priority')
             ->orderBy('created_at')
             ->get()
             ->groupBy(fn (Task $task) => $task->status->value);
 
         $selectedTask = $this->selectedTaskId !== null
-            ? $this->profile->tasks()->with(['events', 'runs', 'comments', 'project'])->find($this->selectedTaskId)
+            ? $this->profile->tasks()->with(['events', 'runs', 'comments', 'project', 'phase.plan', 'dependencies.project'])->find($this->selectedTaskId)
             : null;
+
+        $dependencyOptions = $selectedTask !== null
+            ? $this->profile->tasks()
+                ->where('id', '!=', $selectedTask->id)
+                ->whereNotIn('id', $selectedTask->dependencies->pluck('id'))
+                ->orderBy('ref')
+                ->get()
+            : collect();
 
         $projects = $this->profile->projects()
             ->orderByDesc('is_default')
             ->orderBy('name')
+            ->get();
+
+        $phaseOptions = Phase::query()
+            ->whereHas('plan.project', fn ($q) => $q->where('profile_id', $this->profile->id))
+            ->with('plan:id,name')
+            ->orderBy('plan_id')
+            ->orderBy('number')
             ->get();
 
         return view('livewire.board', [
@@ -583,6 +721,8 @@ class Board extends Component
             'statuses' => TaskStatus::ordered(),
             'selectedTask' => $selectedTask,
             'projects' => $projects,
+            'phaseOptions' => $phaseOptions,
+            'dependencyOptions' => $dependencyOptions,
             'availableDocs' => $this->availableDocs($selectedTask),
         ]);
     }
